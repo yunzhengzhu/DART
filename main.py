@@ -98,7 +98,7 @@ def main(args):
         },
         index=["loss", "dice", "tre", "jac_det"],
     )
-    results.to_csv(os.path.join(args.result_dir, args.exp_dir, "results.csv"))
+    results.to_csv(os.path.join(args.exp_dir, "results.csv"))
 
 
 if __name__ == "__main__":
