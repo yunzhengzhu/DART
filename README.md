@@ -20,8 +20,8 @@
   - [ ] Jacobian determinant
   - [ ] ...
 - Pipeline
-  - [] test
-    - [x] test with LKU-NET, NCC Loss
+  - [ ] test the pipeline
+    - [x] test with LKU-NET, NCC Loss, one epoch
   - [ ] tensorboard - log for all metrics and loss
   - [ ] add argument start channel for LKU-NET
   - [ ] write code to set seed for reproducibility
