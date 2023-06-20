@@ -35,11 +35,12 @@ class NLSTDataset(Dataset):
 
     def __getitem__(self, idx: int):
         #load fixed and moving images
+        #image size (224,192,224) -> (1,224,192,224)
         fixed_img_path = os.path.join(self.data_dir, self.subjects[idx]['fixed'])
         moving_img_path = os.path.join(self.data_dir,self.subjects[idx]['moving'])
 
-        fixed = self.__load_nii_img(fixed_img_path, preprocess= True)[None, ...]
-        moving = self.__load_nii_img(moving_img_path, preprocess= True)[None, ...]
+        fixed_img = self.__load_nii_img(fixed_img_path, preprocess= True)[None, ...]
+        moving_img = self.__load_nii_img(moving_img_path, preprocess= True)[None, ...]
 
         #load fixed and moving keypoints
         fixed_kp = np.genfromtxt(fixed_img_path.replace('images', 'keypoints').replace('nii.gz', 'csv'), delimiter=',')[None, ...]
@@ -49,7 +50,7 @@ class NLSTDataset(Dataset):
         fixed_mask = self.__load_nii_img(fixed_img_path.replace('images', 'masks'), preprocess= False)[None, ...]
         moving_mask = self.__load_nii_img(moving_img_path.replace('images', 'masks'), preprocess= False)[None, ...]
 
-        return fixed, moving, fixed_kp, moving_kp, fixed_mask, moving_mask
+        return fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask
     
     @staticmethod
     def __load_nii_img(img_path, preprocess = False):

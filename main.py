@@ -5,8 +5,7 @@ from argparse import ArgumentParser
 from utils.train_model import Trainer
 from dataset.dataloader import NLSTDataset
 from torch.utils.data import DataLoader
-
-# parser
+import json
 
 
 def argParser():
@@ -21,7 +20,7 @@ def argParser():
         "--result_dir", type=str, default="./results", help="path to output directory"
     )
     parser.add_argument("--model_type", type=str, default="LKU-Net", help="model name")
-    parser.add_argument("--loss", type=str, default="MSE", help="similarity loss function")
+    parser.add_argument("--loss", type=str, default="NCC", help="similarity loss function")
     parser.add_argument("--smooth_w", type=float, default=0.1, help="smooth loss weight")
     parser.add_argument("--opt", type=str, default="adam", help="optimizer")
     parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
@@ -42,6 +41,17 @@ def argParser():
 
 
 def main(args):
+
+    #create experiment folder
+    exp_name = f"{args.model_type}_{args.loss}_{args.opt}_lr{args.lr}_bs{args.batch_size}_seed{args.seed}"
+    exp_dir = os.path.join(args.result_dir, exp_name)
+    if not os.path.exists(exp_dir):
+        os.makedirs(exp_dir)
+    args.exp_dir = exp_dir
+    #save args json
+    with open(os.path.join(args.exp_dir, 'args.json'), 'w') as f:
+        json.dump(vars(args), f, indent=4)
+
     # init model
     model = Trainer(args)
     # init dataset
@@ -61,8 +71,17 @@ def main(args):
     )
 
     # train
-    model.train(train_loader, val_loader)
-    model.predict(test_loader)
+    val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean = model.train(train_loader, val_loader)
+
+    # test
+    test_loss_mean, test_dice_mean, test_tre_mean, test_jac_det_mean = model.predict(test_loader)
+
+    # save results
+    results = pd.DataFrame(
+        {'val': [val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean],
+            'test': [test_loss_mean, test_dice_mean, test_tre_mean, test_jac_det_mean]},
+        index=['loss', 'dice', 'tre', 'jac_det'])
+    results.to_csv(os.path.join(args.results_dir ,args.exp_dir, 'results.csv'))
 
 
 if __name__ == "__main__":

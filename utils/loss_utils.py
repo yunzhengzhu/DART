@@ -81,7 +81,7 @@ class MSE:
     Mean squared error loss.
     """
 
-    def _call__(self, y_true, y_pred):
+    def __call__(self, y_true, y_pred):
         return torch.mean((y_true - y_pred) ** 2)
 
 class SAD:
@@ -89,5 +89,5 @@ class SAD:
     Mean squared error loss.
     """
 
-    def _call__(self, y_true, y_pred):
+    def __call__(self, y_true, y_pred):
         return torch.mean(torch.abs(y_true - y_pred))

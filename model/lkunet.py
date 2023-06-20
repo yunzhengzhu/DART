@@ -45,14 +45,14 @@ class LK_encoder(nn.Module):
         return self.layer_nonlinearity(outputs)
 
 
-class UNet(nn.Module):
+class LKUNet(nn.Module):
     def __init__(self, in_channel, n_classes, start_channel):
         self.in_channel = in_channel
         self.n_classes = n_classes
         self.start_channel = start_channel
         bias_opt = True
 
-        super(UNet, self).__init__()
+        super(LKUNet, self).__init__()
         self.eninput = self.encoder(self.in_channel, self.start_channel, bias=bias_opt)
         self.ec1 = self.encoder(self.start_channel, self.start_channel, bias=bias_opt)
         self.ec2 = self.encoder(self.start_channel, self.start_channel * 2, stride=2, bias=bias_opt)
