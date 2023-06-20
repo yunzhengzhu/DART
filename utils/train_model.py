@@ -13,7 +13,8 @@ from utils.loss_utils import smoothLoss, NCC, Dice, MSE, SAD
 from utils.train_utils import EarlyStopping
 from utils.metric_utils import jacobian_determinant, compute_tre, compute_dice
 
-class baseTrainer():
+
+class baseTrainer:
     def __init__(self, args: ArgumentParser) -> None:
         self.args = args
         self.opt = args.opt
@@ -34,18 +35,20 @@ class baseTrainer():
         self.__init_optimizer()
 
         if args.es:
-            self.early_stopping = EarlyStopping(warmup=self.es_warmup, tolerence=self.es_tolerence, verbose =True)
+            self.early_stopping = EarlyStopping(
+                warmup=self.es_warmup, tolerence=self.es_tolerence, verbose=True
+            )
         else:
             self.early_stopping = None
 
     def __init_optimizer(self):
-        print(f'Initiate {self.opt} optimizer')
+        print(f"Initiate {self.opt} optimizer")
 
         if self.opt == "adam":
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
 
     def __init_sim_loss(self):
-        print(f'Initiate {self.loss} similarity loss')
+        print(f"Initiate {self.loss} similarity loss")
         if self.loss == "NCC":
             self.sim_loss = NCC()
         elif self.loss == "Dice":
@@ -54,14 +57,16 @@ class baseTrainer():
             self.sim_loss = SAD()
         elif self.loss == "MSE":
             self.sim_loss = MSE()
-        
+
     def __init_smooth_loss(self):
-        print(f'Initiate smoothness loss')
+        print(f"Initiate smoothness loss")
         self.smooth_loss = smoothLoss()
 
     def __init_model(self):
         if self.model_type == "LKU-Net":
-            self.model = LKUNet(in_channel=2, n_classes = 3, start_channel = 8) #TODO: START CHANNEL INTO ARGS
+            self.model = LKUNet(
+                in_channel=2, n_classes=3, start_channel=8
+            )  # TODO: START CHANNEL INTO ARGS
             print(self.model)
         else:
             raise NotImplementedError
@@ -83,101 +88,148 @@ class Trainer(baseTrainer):
         super(Trainer, self).__init__(args)
         self.epochs = args.epochs
         self.smooth_w = args.smooth_w
-        self.ckpt_path = os.path.join(args.exp_dir, 'checkpoint.pt')
+        self.ckpt_path = os.path.join(args.exp_dir, "checkpoint.pt")
+
     def train(
         self,
         train_loader: torch.utils.data.DataLoader,
-        val_loader: torch.utils.data.DataLoader
+        val_loader: torch.utils.data.DataLoader,
     ):
-        # loop through epochs
         self.model.train()
-        
+        # loop through epochs
         for i in range(self.epochs):
             # training
             train_loss_sum = 0
             train_jac_det, train_tre, train_dice = [], [], []
-            for batch_idx, (fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask) in enumerate(train_loader):
-                fixed_img, moving_img = fixed_img.float().to(self.device), moving_img.float().to(self.device)
-                fixed_kp, moving_kp = fixed_kp.float().to(self.device), moving_kp.float().to(self.device)
-                fixed_mask, moving_mask = fixed_mask.float().to(self.device), moving_mask.float().to(self.device)
+            for batch_idx, (
+                fixed_img,
+                moving_img,
+                fixed_kp,
+                moving_kp,
+                fixed_mask,
+                moving_mask,
+            ) in enumerate(train_loader):
+                fixed_img, moving_img = fixed_img.float().to(
+                    self.device
+                ), moving_img.float().to(self.device)
+                fixed_kp, moving_kp = fixed_kp.float().to(
+                    self.device
+                ), moving_kp.float().to(self.device)
+                fixed_mask, moving_mask = fixed_mask.float().to(
+                    self.device
+                ), moving_mask.float().to(self.device)
 
                 rf = self.model(moving_img, fixed_img)
                 D_rf = self.diff_transform(rf)
-                moving_reg = self.spatial_transform(moving_img, D_rf.permute(0, 2, 3, 4, 1))
-                moving_mask_reg = self.spatial_transform(moving_mask, D_rf.permute(0, 2, 3, 4, 1))
+                moving_reg = self.spatial_transform(
+                    moving_img, D_rf.permute(0, 2, 3, 4, 1)
+                )
+                moving_mask_reg = self.spatial_transform(
+                    moving_mask, D_rf.permute(0, 2, 3, 4, 1)
+                )
 
                 # compute metrics
-                #batch_jac_det, batch_tre, batch_dice = self.__compute_metrics(D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg)
-                #train_jac_det.extend(batch_jac_det)
-                #train_tre.extend(batch_tre)
-                #train_dice.extend(batch_dice)
+                # batch_jac_det, batch_tre, batch_dice = self.__compute_metrics(D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg)
+                # train_jac_det.extend(batch_jac_det)
+                # train_tre.extend(batch_tre)
+                # train_dice.extend(batch_dice)
 
-                train_loss = self.sim_loss(fixed_img, moving_reg) + self.smooth_w * self.smooth_loss(rf) 
+                train_loss = self.sim_loss(
+                    fixed_img, moving_reg
+                ) + self.smooth_w * self.smooth_loss(rf)
                 train_loss.backward()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
                 train_loss_sum += train_loss.item()
 
-                #training progess - per 10 batches
+                # training progess - per 10 batches
                 if batch_idx % 20 == 0:
-                    print(f'----batch {batch_idx}----')
+                    print(f"----batch {batch_idx}----")
 
             train_loss_mean = train_loss_sum / len(train_loader)
-            #train_jac_det_mean = np.mean(train_jac_det)
-            #train_tre_mean = np.mean(train_tre)
-            #train_dice_mean = np.mean(train_dice)
-            #print("Epoch {} - Train Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}".format(i, train_loss_mean, train_jac_det_mean, train_tre_mean, train_dice_mean))              
+            # train_jac_det_mean = np.mean(train_jac_det)
+            # train_tre_mean = np.mean(train_tre)
+            # train_dice_mean = np.mean(train_dice)
+            # print("Epoch {} - Train Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}".format(i, train_loss_mean, train_jac_det_mean, train_tre_mean, train_dice_mean))
             print("Epoch {} - Train Loss: {:.6f}".format(i, train_loss_mean))
-            import pdb; pdb.set_trace()
 
             # validation
             earlystop = self.__eval(i, val_loader)
             if earlystop:
                 break
-        
-        #if no earlystopping, we save the weights of the last epoch
+
+        # if no earlystopping, we save the weights of the last epoch
         if not self.es:
             torch.save(self.model.state_dict(), self.ckpt_path)
-        
-        val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean = self.predict(val_loader)
+
+        val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean = self.predict(
+            val_loader
+        )
         return val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean
 
     def __eval(self, cur, val_loader: torch.utils.data.DataLoader):
         val_loss_sum = 0
-        val_jac_det, val_tre, val_dice  = [], [], []
+        val_jac_det, val_tre, val_dice = [], [], []
         self.model.eval()
         with torch.no_grad():
-            for batch_idx, (fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask) in enumerate(val_loader):
-                fixed_img, moving_img = fixed_img.float().to(self.device), moving_img.float().to(self.device)
-                fixed_kp, moving_kp = fixed_kp.float().to(self.device), moving_kp.float().to(self.device)
-                fixed_mask, moving_mask = fixed_mask.float().to(self.device), moving_mask.float().to(self.device)
+            for batch_idx, (
+                fixed_img,
+                moving_img,
+                fixed_kp,
+                moving_kp,
+                fixed_mask,
+                moving_mask,
+            ) in enumerate(val_loader):
+                fixed_img, moving_img = fixed_img.float().to(
+                    self.device
+                ), moving_img.float().to(self.device)
+                fixed_kp, moving_kp = fixed_kp.float().to(
+                    self.device
+                ), moving_kp.float().to(self.device)
+                fixed_mask, moving_mask = fixed_mask.float().to(
+                    self.device
+                ), moving_mask.float().to(self.device)
 
-                #pass data to model
+                # pass data to model
                 rf = self.model(moving_img, fixed_img)
                 D_rf = self.diff_transform(rf)
-                moving_reg = self.spatial_transform(moving_img, D_rf.permute(0, 2, 3, 4, 1))
-                moving_mask_reg = self.spatial_transform(moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod = 'nearest')
+                moving_reg = self.spatial_transform(
+                    moving_img, D_rf.permute(0, 2, 3, 4, 1)
+                )
+                moving_mask_reg = self.spatial_transform(
+                    moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
+                )
 
-                #compute metrics
-                batch_jac_det, batch_tre, batch_dice = self.__compute_metrics(D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg)
+                # compute metrics
+                batch_jac_det, batch_tre, batch_dice = self.__compute_metrics(
+                    D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
+                )
                 val_jac_det.extend(batch_jac_det)
                 val_tre.extend(batch_tre)
                 val_dice.extend(batch_dice)
 
-                val_loss = self.sim_loss(fixed_img, moving_reg) + self.smooth_w * self.smooth_loss(rf) 
+                val_loss = self.sim_loss(
+                    fixed_img, moving_reg
+                ) + self.smooth_w * self.smooth_loss(rf)
                 val_loss_sum += val_loss.item()
         val_loss_mean = val_loss_sum / len(val_loader)
         val_jac_det_mean = np.mean(val_jac_det)
         val_tre_mean = np.mean(val_tre)
         val_dice_mean = np.mean(val_dice)
-        print("Validation Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}".format(val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean))              
+        print(
+            "Validation Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}".format(
+                val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean
+            )
+        )
 
         # early stopping
         if self.es:
-            earlystop = self.early_stopping(epoch = cur, 
-                                            val_loss = val_loss_mean, 
-                                            model = self.model,
-                                            ckpt_path = self.ckpt_path)
+            earlystop = self.early_stopping(
+                epoch=cur,
+                val_loss=val_loss_mean,
+                model=self.model,
+                ckpt_path=self.ckpt_path,
+            )
             return earlystop
         else:
             return False
@@ -188,56 +240,92 @@ class Trainer(baseTrainer):
         self.model.eval()
 
         val_loss_sum = 0
-        val_jac_det, val_tre, val_dice  = [], [], []
+        val_jac_det, val_tre, val_dice = [], [], []
         with torch.no_grad():
-            for batch_idx, (fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask) in enumerate(val_loader):
-                fixed_img, moving_img = fixed_img.float().to(self.device), moving_img.float().to(self.device)
-                fixed_kp, moving_kp = fixed_kp.float().to(self.device), moving_kp.float().to(self.device)
-                fixed_mask, moving_mask = fixed_mask.float().to(self.device), moving_mask.float().to(self.device)
+            for batch_idx, (
+                fixed_img,
+                moving_img,
+                fixed_kp,
+                moving_kp,
+                fixed_mask,
+                moving_mask,
+            ) in enumerate(val_loader):
+                fixed_img, moving_img = fixed_img.float().to(
+                    self.device
+                ), moving_img.float().to(self.device)
+                fixed_kp, moving_kp = fixed_kp.float().to(
+                    self.device
+                ), moving_kp.float().to(self.device)
+                fixed_mask, moving_mask = fixed_mask.float().to(
+                    self.device
+                ), moving_mask.float().to(self.device)
 
-                #pass data to model
+                # pass data to model
                 rf = self.model(moving_img, fixed_img)
                 D_rf = self.diff_transform(rf)
-                moving_reg = self.spatial_transform(moving_img, D_rf.permute(0, 2, 3, 4, 1))
-                moving_mask_reg = self.spatial_transform(moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod = 'nearest')
+                moving_reg = self.spatial_transform(
+                    moving_img, D_rf.permute(0, 2, 3, 4, 1)
+                )
+                moving_mask_reg = self.spatial_transform(
+                    moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
+                )
 
-                #compute metrics
-                batch_jac_det, batch_tre, batch_dice = self.__compute_metrics(D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg)
+                # compute metrics
+                batch_jac_det, batch_tre, batch_dice = self.__compute_metrics(
+                    D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
+                )
                 val_jac_det.extend(batch_jac_det)
                 val_tre.extend(batch_tre)
                 val_dice.extend(batch_dice)
 
-                val_loss = self.sim_loss(fixed_img, moving_reg) + self.smooth_w * self.smooth_loss(rf) 
+                val_loss = self.sim_loss(
+                    fixed_img, moving_reg
+                ) + self.smooth_w * self.smooth_loss(rf)
                 val_loss_sum += val_loss.item()
         val_loss_mean = val_loss_sum / len(val_loader)
         val_jac_det_mean = np.mean(val_jac_det)
         val_tre_mean = np.mean(val_tre)
         val_dice_mean = np.mean(val_dice)
 
-        print("Final Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}".format(val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean))              
+        print(
+            "Final Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}".format(
+                val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean
+            )
+        )
         return val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean
-    
+
     @staticmethod
-    def __compute_metrics(D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg):
-        
+    def __compute_metrics(
+        D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
+    ):
         batch_jac_det, batch_tre, batch_dice = [], [], []
 
         for subject_idx in range(len(D_rf)):
-            #jacobian determinant
-            jac_det = jacobian_determinant(D_rf[subject_idx:subject_idx+1].clone().detach().cpu().numpy())
+            # jacobian determinant
+            jac_det = jacobian_determinant(
+                D_rf[subject_idx : subject_idx + 1].clone().detach().cpu().numpy()
+            )
 
-            #TRE keypoints
-            tre = compute_tre(fix_lms = fixed_kp[subject_idx].clone().detach().cpu().numpy(), 
-                              mov_lms = moving_kp[subject_idx].clone().detach().cpu().numpy(), 
-                              disp = D_rf[subject_idx].clone().detach().cpu().numpy(), 
-                              spacing_fix = 1.5, 
-                              spacing_mov = 1.5) #spacing is 1.5 for NLST
-            
-            #Dice masks
-            mean_dice, dice = compute_dice(fixed = fixed_mask[subject_idx].clone().detach().cpu().numpy(), 
-                                moving = moving_mask[subject_idx].clone().detach().cpu().numpy(), 
-                                moving_warped = moving_mask_reg[subject_idx].clone().detach().cpu().numpy(), 
-                                labels = [1]) #labels is 1 for NLST
+            # TRE keypoints
+            tre = compute_tre(
+                fix_lms=fixed_kp[subject_idx].clone().detach().cpu().numpy(),
+                mov_lms=moving_kp[subject_idx].clone().detach().cpu().numpy(),
+                disp=D_rf[subject_idx].clone().detach().cpu().numpy(),
+                spacing_fix=1.5,
+                spacing_mov=1.5,
+            )  # spacing is 1.5 for NLST
+
+            # Dice masks
+            mean_dice, dice = compute_dice(
+                fixed=fixed_mask[subject_idx].clone().detach().cpu().numpy(),
+                moving=moving_mask[subject_idx].clone().detach().cpu().numpy(),
+                moving_warped=moving_mask_reg[subject_idx]
+                .clone()
+                .detach()
+                .cpu()
+                .numpy(),
+                labels=[1],
+            )  # labels is 1 for NLST
             batch_jac_det.append(jac_det)
             batch_tre.append(tre)
             batch_dice.append(mean_dice)
