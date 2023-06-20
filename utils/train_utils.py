@@ -13,6 +13,33 @@ def set_seed(seed: int) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
+
 class EarlyStopping:
-    def __init__(self) -> None:
-        pass
+    def __init__(self, warmup: int = 10, tolerence: int = 20, verbose: bool =True) -> None:
+        self.tolerence = tolerence
+        self.verbose = verbose
+        self.counter = 0
+        self.lowest_val_loss = np.Inf
+        self.early_stop = False
+        self.warmup = warmup
+
+    def __call__(self, epoch: int , val_loss: float, model: torch.nn.Module, ckpt_path: str = 'checkpoint.pt') -> None:
+        if epoch < self.warmup:
+            pass
+        elif np.isinf(self.lowest_val_loss):
+            self.save_checkpoint(val_loss, model, ckpt_path)
+            self.lowest_val_loss = val_loss
+        elif val_loss > self.lowest_val_loss:
+            self.counter += 1
+            print(f'EarlyStopping counter: {self.counter} out of {self.tolerence}')
+            if self.counter >= self.tolerence:
+                self.early_stop = True
+        else:
+            self.save_checkpoint(val_loss, model, ckpt_path)
+            self.lowest_val_loss = val_loss
+            self.counter = 0
+
+    def save_checkpoint(self, val_loss: float, model: torch.nn.Module, ckpt_path: str) -> None:
+        if self.verbose:
+            print(f'Validation loss decreased from {self.lowest_val_loss:.6f} to {val_loss:.6f}. Model saved.')
+        torch.save(model.state_dict(), ckpt_path)
