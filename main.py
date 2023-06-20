@@ -2,7 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 from argparse import ArgumentParser
-from miccai_learn2reg_2023.learn2reg2023.utils.train_model import Trainer
+from utils.train_model import Trainer
 from dataset.dataloader import NLSTDataset
 from torch.utils.data import DataLoader
 
@@ -12,13 +12,13 @@ from torch.utils.data import DataLoader
 def argParser():
     parser = ArgumentParser()
     parser.add_argument(
-        "--data_dir", type=str, default=None, help="path to data directory"
+        "--data_dir", type=str, default='/workspace/databases/imgreg/NLST2023', help="path to data directory"
     )
     parser.add_argument(
-        "--output_dir", type=str, default="./results", help="path to output directory"
+        "--json_file", type=str, default='NLST_dataset.json', help="name of json file"
     )
     parser.add_argument(
-        "--split_dir", type=str, default=None, help="path to split directory"
+        "--result_dir", type=str, default="./results", help="path to output directory"
     )
     parser.add_argument("--model", type=str, default="LKU-Net", help="model name")
     parser.add_argument("--loss", type=str, default="MSE", help="loss function")
@@ -38,8 +38,9 @@ def main(args):
     # init model
     model = Trainer(args)
     # init dataset
-    train_dataset = NLSTDataset(args, mode="train")
-    val_dataset = NLSTDataset(args, mode="val")
+    train_dataset = NLSTDataset(data_dir = args.data_dir, json_file = args.json_file, mode="train")
+    val_dataset = NLSTDataset(data_dir = args.data_dir, json_file = args.json_file, mode="val")
+    test_dataset = NLSTDataset(data_dir = args.data_dir, json_file = args.json_file, mode="test")
 
     # init dataloader
     train_loader = DataLoader(
@@ -48,9 +49,13 @@ def main(args):
     val_loader = DataLoader(
         val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4
     )
+    test_loader = DataLoader(
+        test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4
+    )
 
     # train
     model.train(train_loader, val_loader)
+    model.predict(test_loader)
 
 
 if __name__ == "__main__":
