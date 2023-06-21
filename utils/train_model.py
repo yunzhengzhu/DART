@@ -165,7 +165,16 @@ class Trainer(baseTrainer):
         val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean = self.predict(
             val_loader
         )
-        return val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean
+
+        # save results
+        results = pd.DataFrame(
+            {
+                "val": [val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean],
+            },
+            index=["loss", "dice", "tre", "jac_det"],
+        )
+
+        return results
 
     def __eval(self, cur, val_loader: torch.utils.data.DataLoader):
         val_loss_sum = 0

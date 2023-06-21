@@ -67,9 +67,6 @@ def main(args):
     val_dataset = NLSTDataset(
         data_dir=args.data_dir, json_file=args.json_file, mode="val"
     )
-    test_dataset = NLSTDataset(
-        data_dir=args.data_dir, json_file=args.json_file, mode="test"
-    )
 
     # init dataloader
     train_loader = DataLoader(
@@ -78,26 +75,10 @@ def main(args):
     val_loader = DataLoader(
         val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4
     )
-    # test_loader = DataLoader(
-    #    test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4
-    # )
 
     # train
-    val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean = model.train(
-        train_loader, val_loader
-    )
+    results = model.train(train_loader, val_loader)
 
-    # test
-    # test_loss_mean, test_dice_mean, test_tre_mean, test_jac_det_mean = model.predict(test_loader)
-
-    # save results
-    results = pd.DataFrame(
-        {
-            "val": [val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean],
-            #'test': [test_loss_mean, test_dice_mean, test_tre_mean, test_jac_det_mean]
-        },
-        index=["loss", "dice", "tre", "jac_det"],
-    )
     results.to_csv(os.path.join(args.exp_dir, "results.csv"))
 
 
