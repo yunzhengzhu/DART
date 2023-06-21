@@ -162,17 +162,7 @@ class Trainer(baseTrainer):
         if not self.es:
             torch.save(self.model.state_dict(), self.ckpt_path)
 
-        val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean = self.predict(
-            val_loader
-        )
-
-        # save results
-        results = pd.DataFrame(
-            {
-                "val": [val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean],
-            },
-            index=["loss", "dice", "tre", "jac_det"],
-        )
+        results = self.predict(val_loader)
 
         return results
 
@@ -245,6 +235,7 @@ class Trainer(baseTrainer):
 
     def predict(self, val_loader):
         # load final model
+        print('----Load Model Checkpoint----')
         self.model.load_state_dict(torch.load(self.ckpt_path))
         self.model.eval()
 
@@ -301,7 +292,16 @@ class Trainer(baseTrainer):
                 val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean
             )
         )
-        return val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean
+
+        # save results
+        results = pd.DataFrame(
+            {
+                "val": [val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean],
+            },
+            index=["loss", "dice", "tre", "jac_det"],
+        )
+
+        return results
 
     @staticmethod
     def __compute_metrics(

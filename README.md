@@ -8,7 +8,7 @@
   - [ ] test the training pipeline (main.py)
     - [x] test with LKU-NET, NCC Loss, one epoch
     - [ ] ...
-  - [ ] finish the eval pipeline (eval.py)
+  - [x] finish the eval pipeline (eval.py)
   - [ ] tensorboard - log for all metrics and loss
   - [ ] add argument start channel for LKU-NET
   - [ ] write code to set seed for reproducibility
