@@ -9,9 +9,9 @@
     - [x] test with LKU-NET, NCC Loss, one epoch
     - [ ] ...
   - [x] finish the eval pipeline (eval.py)
-  - [ ] tensorboard - log for all metrics and loss
-  - [ ] add argument start channel for LKU-NET
-  - [ ] write code to set seed for reproducibility
+  - [x] tensorboard - log for all metrics and loss
+  - [x] add argument start channel for LKU-NET
+  - [x] write code to set seed for reproducibility
   - [ ] ...
 - DataLoader
   - [x] NLST dataloader

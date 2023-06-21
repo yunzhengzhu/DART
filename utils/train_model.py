@@ -12,6 +12,7 @@ from model.transform import SpatialTransform, DiffeomorphicTransform
 from utils.loss_utils import smoothLoss, NCC, Dice, MSE, SAD
 from utils.train_utils import EarlyStopping
 from utils.metric_utils import jacobian_determinant, compute_tre, compute_dice
+from tensorboardX import SummaryWriter
 
 
 class baseTrainer:
@@ -26,6 +27,9 @@ class baseTrainer:
         self.es = args.es
         self.es_warmup = args.es_warmup
         self.es_tolerence = args.es_tolerence
+        self.start_channel = args.start_channel
+        self.exp_dir = args.exp_dir
+        self.log = args.log
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -33,22 +37,23 @@ class baseTrainer:
         self.__init_sim_loss()
         self.__init_smooth_loss()
         self.__init_optimizer()
-
-        if args.es:
-            self.early_stopping = EarlyStopping(
-                warmup=self.es_warmup, tolerence=self.es_tolerence, verbose=True
-            )
-        else:
-            self.early_stopping = None
+        self.__init_logger()
+        self.__init_es()
 
     def __init_optimizer(self):
-        print(f"Initiate {self.opt} optimizer")
+        print(f"Initiate {self.opt} optimizer", end=" ")
 
         if self.opt == "adam":
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        elif self.opt == "sgd":
+            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr)
+        else:
+            raise NotImplementedError
+
+        print("...done")
 
     def __init_sim_loss(self):
-        print(f"Initiate {self.loss} similarity loss")
+        print(f"Initiate {self.loss} similarity loss", end=" ")
         if self.loss == "NCC":
             self.sim_loss = NCC()
         elif self.loss == "Dice":
@@ -57,19 +62,26 @@ class baseTrainer:
             self.sim_loss = SAD()
         elif self.loss == "MSE":
             self.sim_loss = MSE()
+        else:
+            raise NotImplementedError
+
+        print("...done")
 
     def __init_smooth_loss(self):
-        print(f"Initiate smoothness loss")
+        print(f"Initiate smoothness loss", end=" ")
         self.smooth_loss = smoothLoss()
+        print("...done")
 
     def __init_model(self):
+        print(f"Initiate {self.model_type} model", end=" ")
         if self.model_type == "LKU-Net":
             self.model = LKUNet(
-                in_channel=2, n_classes=3, start_channel=8
-            )  # TODO: START CHANNEL INTO ARGS
+                in_channel=2, n_classes=3, start_channel=self.start_channel
+            )
             print(self.model)
         else:
             raise NotImplementedError
+        print("...done")
 
         self.spatial_transform = SpatialTransform()
         self.diff_transform = DiffeomorphicTransform()
@@ -81,6 +93,31 @@ class baseTrainer:
         self.model.to(self.device)
         self.spatial_transform.to(self.device)
         self.diff_transform.to(self.device)
+
+    def __init_logger(self):
+        if self.log:
+            print("Initiate tensorboard logger", end=" ")
+            self.log_dir = os.path.join(self.exp_dir, "logs")
+            os.makedirs(self.log_dir, exist_ok=True)
+            self.writer = SummaryWriter(log_dir=self.log_dir)
+            print("...done")
+        else:
+            self.writer = None
+
+    def __init_es(self):
+        if self.es:
+            print(
+                "Initiate early stopping with warmup: {} and tolerence: {}".format(
+                    self.es_warmup, self.es_tolerence
+                ),
+                end=" ",
+            )
+            self.early_stopping = EarlyStopping(
+                warmup=self.es_warmup, tolerence=self.es_tolerence, verbose=True
+            )
+            print("...done")
+        else:
+            self.early_stopping = None
 
 
 class Trainer(baseTrainer):
@@ -153,6 +190,10 @@ class Trainer(baseTrainer):
             # print("Epoch {} - Train Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}".format(i, train_loss_mean, train_jac_det_mean, train_tre_mean, train_dice_mean))
             print("Epoch {} - Train Loss: {:.6f}".format(i, train_loss_mean))
 
+            # log training
+            if self.writer:
+                self.writer.add_scalar("train/loss", train_loss_mean, i)
+
             # validation
             earlystop = self.__eval(i, val_loader)
             if earlystop:
@@ -163,6 +204,9 @@ class Trainer(baseTrainer):
             torch.save(self.model.state_dict(), self.ckpt_path)
 
         results = self.predict(val_loader)
+
+        if self.writer:
+            self.writer.close()
 
         return results
 
@@ -221,6 +265,12 @@ class Trainer(baseTrainer):
             )
         )
 
+        if self.writer:
+            self.writer.add_scalar("val/loss", val_loss_mean, cur)
+            self.writer.add_scalar("val/dice", val_dice_mean, cur)
+            self.writer.add_scalar("val/tre", val_tre_mean, cur)
+            self.writer.add_scalar("val/jac_det", val_jac_det_mean, cur)
+
         # early stopping
         if self.es:
             earlystop = self.early_stopping(
@@ -235,7 +285,7 @@ class Trainer(baseTrainer):
 
     def predict(self, val_loader):
         # load final model
-        print('----Load Model Checkpoint----')
+        print("----Load Model Checkpoint----")
         self.model.load_state_dict(torch.load(self.ckpt_path))
         self.model.eval()
 

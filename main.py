@@ -6,6 +6,7 @@ from utils.train_model import Trainer
 from dataset.dataloader import NLSTDataset
 from torch.utils.data import DataLoader
 import json
+from utils.train_utils import set_seed, seed_worker
 
 
 def argParser():
@@ -23,6 +24,9 @@ def argParser():
         "--result_dir", type=str, default="./results", help="path to output directory"
     )
     parser.add_argument("--model_type", type=str, default="LKU-Net", help="model name")
+    parser.add_argument(
+        "--start_channel", type=int, default=8, help="start channel U-Net"
+    )
     parser.add_argument(
         "--loss", type=str, default="NCC", help="similarity loss function"
     )
@@ -43,11 +47,17 @@ def argParser():
     parser.add_argument(
         "--es_tolerence", type=int, default=20, help="early stopping tolerence"
     )
+    parser.add_argument(
+        "--log", action="store_true", default=False, help="log training"
+    )
     args = parser.parse_args()
     return args
 
 
 def main(args):
+    # set seed
+    set_seed(args.seed)
+
     # create experiment folder
     exp_name = f"{args.model_type}_{args.loss}_{args.opt}_lr{args.lr}_bs{args.batch_size}_seed{args.seed}"
     exp_dir = os.path.join(args.result_dir, exp_name)
@@ -70,10 +80,19 @@ def main(args):
 
     # init dataloader
     train_loader = DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=4,
+        worker_init_fn=seed_worker,
+        pin_memory=True,
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4
+        val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
     )
 
     # train

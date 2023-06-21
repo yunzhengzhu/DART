@@ -22,13 +22,13 @@ def argParser():
 
 def main(args):
     # set up arguments
-    with open(os.path.join(args.exp_dir, 'args.json'), 'r') as file:
+    with open(os.path.join(args.exp_dir, "args.json"), "r") as file:
         loaded_args = json.load(file)
     for key, value in loaded_args.items():
         setattr(args, key, value)
 
     # create save directory
-    args.save_dir = os.path.join(args.exp_dir, 'eval')
+    args.save_dir = os.path.join(args.exp_dir, "eval")
     os.makedirs(args.save_dir)
 
     # init model
@@ -41,7 +41,11 @@ def main(args):
 
     # init dataloader
     val_loader = DataLoader(
-        val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4
+        val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True,
     )
 
     # train
