@@ -4,15 +4,6 @@
 ### Deep Learning Based Models 
 **TODO:**
 
-- Pipeline
-  - [ ] test the training pipeline (main.py)
-    - [x] test with LKU-NET, NCC Loss, one epoch
-    - [ ] ...
-  - [x] finish the eval pipeline (eval.py)
-  - [x] tensorboard - log for all metrics and loss
-  - [x] add argument start channel for LKU-NET
-  - [x] write code to set seed for reproducibility
-  - [ ] ...
 - DataLoader
   - [x] NLST dataloader
   - [ ] ThoraxCBCT dataloader
@@ -20,16 +11,23 @@
   - [x] lkunet
   - [ ] voxelmorph
   - [ ] transmorph
-- Loss Functions (all functions available - need to test)
+- Loss Functions
   - [x] NCC
-  - [ ] MSE
-  - [ ] Dice
-  - [ ] SAD
-  - [ ] MINDSSC (function not available)
+  - [x] MSE
+  - [x] Dice
+  - [x] SAD
+  - [ ] Structural similarity index (SSIM)
+  - [ ] Mutual information (MI)
+  - [ ] Local mutual information (LMI)
+  - [ ] Modality independent neighbourhood descriptor with self-similarity context (MIND-SSC)
+  - [ ] MSE for keypoints
   - [ ] ...
-- Metrics (all functions available - need to test)
-  - [ ] TRE(keypoints)
-  - [ ] Dice(masks)
-  - [ ] Jacobian determinant
+- Metrics
+  - [x] TRE(keypoints)
+  - [x] Dice(masks)
+  - [x] Jacobian determinant
   - [ ] ...
 
+- Others
+  - [ ] need to double check displacement field saved format in learn2reg 
+  - [ ] add scheduler

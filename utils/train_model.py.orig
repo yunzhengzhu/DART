@@ -169,14 +169,7 @@ class Trainer(baseTrainer):
                 )
 
                 # compute metrics
-                #(
-                #    batch_jac_det,
-                #    batch_jac_det_std,
-                #    batch_tre,
-                #    batch_dice,
-                #) = self.__compute_metrics(
-                #    D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
-                #)
+                # batch_jac_det, batch_tre, batch_dice = self.__compute_metrics(D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg)
                 # train_jac_det.extend(batch_jac_det)
                 # train_tre.extend(batch_tre)
                 # train_dice.extend(batch_dice)
@@ -227,7 +220,7 @@ class Trainer(baseTrainer):
 
     def __eval(self, cur, val_loader: torch.utils.data.DataLoader) -> bool:
         val_loss_sum = 0
-        val_num_foldings, val_log_jac_det_std, val_tre, val_dice = [], [], [], []
+        val_jac_det, val_jac_det_std, val_tre, val_dice = [], [], [], []
         self.model.eval()
         with torch.no_grad():
             for batch_idx, (
@@ -260,15 +253,15 @@ class Trainer(baseTrainer):
 
                 # compute metrics
                 (
-                    batch_num_foldings,
-                    batch_log_jac_det_std,
+                    batch_jac_det,
+                    batch_jac_det_std,
                     batch_tre,
                     batch_dice,
                 ) = self.__compute_metrics(
                     D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
                 )
-                val_num_foldings.extend(batch_num_foldings)
-                val_log_jac_det_std.extend(batch_log_jac_det_std)
+                val_jac_det.extend(batch_jac_det)
+                val_jac_det_std.extend(batch_jac_det_std)
                 val_tre.extend(batch_tre)
                 val_dice.extend(batch_dice)
 
@@ -278,17 +271,17 @@ class Trainer(baseTrainer):
                 val_loss_sum += val_loss.item()
         val_loss_mean = val_loss_sum / len(val_loader)
 
-        val_num_foldings_mean = np.mean(val_num_foldings)
-        val_log_jac_det_std_mean = np.mean(val_log_jac_det_std)
+        val_jac_det_mean = np.mean(val_jac_det)
+        val_jac_det_std_mean = np.mean(val_jac_det_std)
         val_tre_mean = np.mean(val_tre)
         val_dice_mean = np.mean(val_dice)
         print(
-            "Validation Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; NumFold: {:.6f}; LogJacDetStd: {:6f}".format(
+            "Validation Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}; JacDetStd: {:6f}".format(
                 val_loss_mean,
                 val_dice_mean,
                 val_tre_mean,
-                val_num_foldings_mean,
-                val_log_jac_det_std_mean,
+                val_jac_det_mean,
+                val_jac_det_std_mean,
             )
         )
 
@@ -296,8 +289,8 @@ class Trainer(baseTrainer):
             self.writer.add_scalar("val/loss", val_loss_mean, cur)
             self.writer.add_scalar("val/dice", val_dice_mean, cur)
             self.writer.add_scalar("val/tre", val_tre_mean, cur)
-            self.writer.add_scalar("val/num_foldings", val_num_foldings_mean, cur)
-            self.writer.add_scalar("val/log_jac_det_std", val_log_jac_det_std_mean, cur)
+            self.writer.add_scalar("val/jac_det", val_jac_det_mean, cur)
+            self.writer.add_scalar("val/jac_det_std", val_jac_det_std_mean, cur)
 
         # early stopping
         if self.es:
@@ -318,7 +311,7 @@ class Trainer(baseTrainer):
         self.model.eval()
 
         val_loss_sum = 0
-        val_num_foldings, val_log_jac_det_std, val_tre, val_dice = [], [], [], []
+        val_jac_det, val_jac_det_std, val_tre, val_dice = [], [], [], []
         with torch.no_grad():
             for batch_idx, (
                 fixed_img,
@@ -350,15 +343,15 @@ class Trainer(baseTrainer):
 
                 # compute metrics
                 (
-                    batch_num_foldings,
-                    batch_log_jac_det_std,
+                    batch_jac_det,
+                    batch_jac_det_std,
                     batch_tre,
                     batch_dice,
                 ) = self.__compute_metrics(
                     D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
                 )
-                val_num_foldings.extend(batch_num_foldings)
-                val_log_jac_det_std.extend(batch_log_jac_det_std)
+                val_jac_det.extend(batch_jac_det)
+                val_jac_det_std.extend(batch_jac_det_std)
                 val_tre.extend(batch_tre)
                 val_dice.extend(batch_dice)
 
@@ -393,18 +386,18 @@ class Trainer(baseTrainer):
                         )
 
         val_loss_mean = val_loss_sum / len(val_loader)
-        val_num_foldings_mean = np.mean(val_num_foldings)
-        val_log_jac_det_std_mean = np.mean(val_log_jac_det_std)
+        val_jac_det_mean = np.mean(val_jac_det)
+        val_jac_det_std_mean = np.mean(val_jac_det_std)
         val_tre_mean = np.mean(val_tre)
         val_dice_mean = np.mean(val_dice)
 
         print(
-            "Validation Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; NumFold: {:.6f}; LogJacDetStd: {:6f}".format(
+            "Validation Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}; JacDetStd: {:6f}".format(
                 val_loss_mean,
                 val_dice_mean,
                 val_tre_mean,
-                val_num_foldings_mean,
-                val_log_jac_det_std_mean,
+                val_jac_det_mean,
+                val_jac_det_std_mean,
             )
         )
 
@@ -415,11 +408,11 @@ class Trainer(baseTrainer):
                     val_loss_mean,
                     val_dice_mean,
                     val_tre_mean,
-                    val_num_foldings_mean,
-                    val_log_jac_det_std_mean,
+                    val_jac_det_mean,
+                    val_jac_det_std_mean,
                 ],
             },
-            index=["loss", "dice", "tre", "num_fold", "log_jac_det_std"],
+            index=["loss", "dice", "tre", "jac_det", "jac_det_std"],
         )
 
         return results
@@ -428,16 +421,16 @@ class Trainer(baseTrainer):
     def __compute_metrics(
         D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
     ):
-        batch_num_foldings, batch_log_jac_det_std, batch_tre, batch_dice = [], [], [], []
+        batch_jac_det, batch_jac_det_std, batch_tre, batch_dice = [], [], [], []
 
         for subject_idx in range(len(D_rf)):
             # jacobian determinant
-            num_foldings, log_jac_det_std = jacobian_determinant(
+            jac_det, jac_det_std = jacobian_determinant(
                 D_rf[subject_idx : subject_idx + 1].clone().detach().cpu().numpy()
             )
             
             # TRE keypoints
-            tre = compute_tre(
+            mean_tre, tre = compute_tre(
                 fix_lms=fixed_kp[subject_idx].clone().detach().cpu().numpy(),
                 mov_lms=moving_kp[subject_idx].clone().detach().cpu().numpy(),
                 disp=D_rf.permute(0, 2, 3, 4, 1)[subject_idx]
@@ -460,11 +453,15 @@ class Trainer(baseTrainer):
                 .numpy(),
                 labels=[1],
             )  # labels is 1 for NLST
-            batch_num_foldings.append(num_foldings)
-            batch_log_jac_det_std.append(log_jac_det_std)
+            batch_jac_det.append(jac_det)
+<<<<<<< HEAD
+            batch_tre.append(mean_tre)
+=======
+            batch_jac_det_std.append(jac_det_std)
             batch_tre.append(tre)
+>>>>>>> f65d8904ce1ce629039f248f4ca1fc5453b9c84c
             batch_dice.append(mean_dice)
-        return batch_num_foldings, batch_log_jac_det_std, batch_tre, batch_dice
+        return batch_jac_det, batch_jac_det_std, batch_tre, batch_dice
 
     @staticmethod
     def __compute_loss(loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf):
