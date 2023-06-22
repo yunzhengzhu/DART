@@ -35,14 +35,14 @@ def argParser():
         "--loss",
         nargs="+",
         help="list of loss",
-        default=["NCC", "Smooth", "Dice"],
+        default=["NCC", "Smooth"],
         type=str,
     )
     parser.add_argument(
         "--loss_weight",
         nargs="+",
         help="list of loss weight",
-        default=[1.0, 1.0, 1.0],
+        default=[1.0, 0.1],
         type=float,
     )
     parser.add_argument("--opt", type=str, default="adam", help="optimizer")
