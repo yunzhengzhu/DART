@@ -124,7 +124,7 @@ class baseTrainer:
 
 
 class Trainer(baseTrainer):
-    def __init__(self, args):
+    def __init__(self, args) -> None:
         super(Trainer, self).__init__(args)
         self.epochs = args.epochs
         self.ckpt_path = os.path.join(args.exp_dir, "checkpoint.pt")
@@ -134,13 +134,13 @@ class Trainer(baseTrainer):
         self,
         train_loader: torch.utils.data.DataLoader,
         val_loader: torch.utils.data.DataLoader,
-    ):
+    ) -> pd.DataFrame:
         self.model.train()
         # loop through epochs
         for i in range(self.epochs):
             # training
             train_loss_sum = 0
-            #train_jac_det, train_tre, train_dice = [], [], []
+            # train_jac_det, train_tre, train_dice = [], [], []
             for batch_idx, (
                 fixed_img,
                 moving_img,
@@ -218,7 +218,7 @@ class Trainer(baseTrainer):
 
         return results
 
-    def __eval(self, cur, val_loader: torch.utils.data.DataLoader):
+    def __eval(self, cur, val_loader: torch.utils.data.DataLoader) -> bool:
         val_loss_sum = 0
         val_jac_det, val_jac_det_std, val_tre, val_dice = [], [], [], []
         self.model.eval()
@@ -304,7 +304,7 @@ class Trainer(baseTrainer):
         else:
             return False
 
-    def predict(self, val_loader: torch.utils.data.DataLoader):
+    def predict(self, val_loader: torch.utils.data.DataLoader) -> pd.DataFrame:
         # load final model
         print("----Load Model Checkpoint----")
         self.model.load_state_dict(torch.load(self.ckpt_path))
@@ -361,16 +361,26 @@ class Trainer(baseTrainer):
 
                 val_loss_sum += val_loss.item()
 
-                #save displacement field - need to double check with learn2reg
+                # save displacement field - need to double check with learn2reg
                 if self.save_df:
-                    os.makedirs(os.path.join(self.exp_dir, "displacement_field"), exist_ok=True)
-                    for iidx, subject in enumerate(val_loader.dataset.subjects[batch_idx*val_loader.batch_size:(batch_idx+1)*val_loader.batch_size]):
+                    os.makedirs(
+                        os.path.join(self.exp_dir, "displacement_field"), exist_ok=True
+                    )
+                    for iidx, subject in enumerate(
+                        val_loader.dataset.subjects[
+                            batch_idx
+                            * val_loader.batch_size : (batch_idx + 1)
+                            * val_loader.batch_size
+                        ]
+                    ):
                         subject_id = subject["moving"].split("/")[-1].split("_")[1]
                         np.save(
                             os.path.join(
                                 self.exp_dir,
                                 "displacement_field",
-                                "disp_NLST_{}.npy".format(subject_id), #need to change when doing another task
+                                "disp_NLST_{}.npy".format(
+                                    subject_id
+                                ),  # need to change when doing another task
                             ),
                             D_rf[iidx].permute(1, 2, 3, 0).detach().cpu().numpy(),
                         )

@@ -6,6 +6,7 @@ import nibabel as nib
 import os
 import json
 import numpy as np
+from typing import Tuple
 
 
 class NLSTDataset(Dataset):
@@ -64,7 +65,7 @@ class NLSTDataset(Dataset):
         return fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask
 
     @staticmethod
-    def __load_nii_img(img_path, preprocess: bool = False):
+    def __load_nii_img(img_path, preprocess: bool = False) -> np.ndarray:
         img = nib.load(img_path)
         arr = img.get_fdata()
 
