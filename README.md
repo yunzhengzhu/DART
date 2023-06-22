@@ -31,3 +31,4 @@
 - Others
   - [ ] need to double check displacement field saved format in learn2reg 
   - [ ] add scheduler
+  - [ ] train val split
