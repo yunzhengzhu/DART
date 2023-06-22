@@ -364,9 +364,9 @@ class Trainer(baseTrainer):
             jac_det = jacobian_determinant(
                 D_rf[subject_idx : subject_idx + 1].clone().detach().cpu().numpy()
             )
-
+            
             # TRE keypoints
-            tre = compute_tre(
+            mean_tre, tre = compute_tre(
                 fix_lms=fixed_kp[subject_idx].clone().detach().cpu().numpy(),
                 mov_lms=moving_kp[subject_idx].clone().detach().cpu().numpy(),
                 disp=D_rf[subject_idx].clone().detach().cpu().numpy(),
@@ -386,6 +386,6 @@ class Trainer(baseTrainer):
                 labels=[1],
             )  # labels is 1 for NLST
             batch_jac_det.append(jac_det)
-            batch_tre.append(tre)
+            batch_tre.append(mean_tre)
             batch_dice.append(mean_dice)
         return batch_jac_det, batch_tre, batch_dice

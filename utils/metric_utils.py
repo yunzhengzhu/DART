@@ -86,16 +86,20 @@ def jacobian_determinant(disp):
 
 
 def compute_tre(fix_lms, mov_lms, disp, spacing_fix, spacing_mov):
-    fix_lms_disp_x = map_coordinates(disp[:, :, :, 0], fix_lms.transpose())
-    fix_lms_disp_y = map_coordinates(disp[:, :, :, 1], fix_lms.transpose())
-    fix_lms_disp_z = map_coordinates(disp[:, :, :, 2], fix_lms.transpose())
+    fix_lms = fix_lms.squeeze()
+    mov_lms = mov_lms.squeeze()
+
+    fix_lms_disp_x = map_coordinates(disp[0], fix_lms.transpose())
+    fix_lms_disp_y = map_coordinates(disp[1], fix_lms.transpose())
+    fix_lms_disp_z = map_coordinates(disp[2], fix_lms.transpose())
     fix_lms_disp = np.array(
         (fix_lms_disp_x, fix_lms_disp_y, fix_lms_disp_z)
     ).transpose()
 
     fix_lms_warped = fix_lms + fix_lms_disp
 
-    return np.linalg.norm((fix_lms_warped - mov_lms) * spacing_mov, axis=1)
+    tre = np.linalg.norm((fix_lms_warped - mov_lms) * spacing_mov, axis=1)
+    return tre.mean(), tre
 
 
 def compute_dice_coefficient(mask_gt, mask_pred):
