@@ -53,10 +53,10 @@ def argParser():
         "--es", action="store_true", default=False, help="early stopping"
     )
     parser.add_argument(
-        "--es_warmup", type=int, default=10, help="early stopping warmup"
+        "--es_warmup", type=int, default=0, help="early stopping warmup"
     )
     parser.add_argument(
-        "--es_tolerence", type=int, default=20, help="early stopping tolerence"
+        "--es_patience", type=int, default=20, help="early stopping patience"
     )
     parser.add_argument(
         "--log", action="store_true", default=False, help="log training"
@@ -80,7 +80,7 @@ def main(args):
     set_seed(args.seed)
 
     # create experiment folder
-    exp_name = f"{args.model_type}_{'_'.join(args.loss)}_{args.opt}_lr{args.lr}_bs{args.batch_size}_seed{args.seed}"
+    exp_name = f"{args.model_type}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_seed{args.seed}"
     exp_dir = os.path.join(args.result_dir, exp_name)
     if not os.path.exists(exp_dir):
         os.makedirs(exp_dir)

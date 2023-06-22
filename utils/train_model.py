@@ -27,7 +27,7 @@ class baseTrainer:
         self.model_type = args.model_type
         self.es = args.es
         self.es_warmup = args.es_warmup
-        self.es_tolerence = args.es_tolerence
+        self.es_patience = args.es_patience
         self.start_channel = args.start_channel
         self.exp_dir = args.exp_dir
         self.log = args.log
@@ -110,13 +110,13 @@ class baseTrainer:
     def __init_es(self):
         if self.es:
             print(
-                "Initiate early stopping with warmup: {} and tolerence: {}".format(
-                    self.es_warmup, self.es_tolerence
+                "Initiate early stopping with warmup: {} and patience: {}".format(
+                    self.es_warmup, self.es_patience
                 ),
                 end=" ",
             )
             self.early_stopping = EarlyStopping(
-                warmup=self.es_warmup, tolerence=self.es_tolerence, verbose=True
+                warmup=self.es_warmup, patience =self.es_patience, verbose=True
             )
             print("...done")
         else:

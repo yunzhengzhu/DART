@@ -28,9 +28,9 @@ def seed_worker(worker_id):
 
 class EarlyStopping:
     def __init__(
-        self, warmup: int = 10, tolerence: int = 20, verbose: bool = True
+        self, warmup: int = 10, patience: int = 20, verbose: bool = True
     ) -> None:
-        self.tolerence = tolerence
+        self.patience = patience
         self.verbose = verbose
         self.counter = 0
         self.lowest_val_loss = np.Inf
@@ -51,8 +51,8 @@ class EarlyStopping:
             self.lowest_val_loss = val_loss
         elif val_loss > self.lowest_val_loss:
             self.counter += 1
-            print(f"EarlyStopping counter: {self.counter} out of {self.tolerence}")
-            if self.counter >= self.tolerence:
+            print(f"EarlyStopping counter: {self.counter} out of {self.patience}")
+            if self.counter >= self.patience:
                 self.early_stop = True
         else:
             self.save_checkpoint(val_loss, model, ckpt_path)
