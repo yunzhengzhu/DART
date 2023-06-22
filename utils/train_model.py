@@ -23,6 +23,7 @@ class baseTrainer:
         self.batch_size = args.batch_size
         self.seed = args.seed
         self.loss = args.loss
+        self.loss_weight = args.loss_weight
         self.model_type = args.model_type
         self.es = args.es
         self.es_warmup = args.es_warmup
@@ -30,12 +31,12 @@ class baseTrainer:
         self.start_channel = args.start_channel
         self.exp_dir = args.exp_dir
         self.log = args.log
+        self.print_every = args.print_every
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.__init_model()
-        self.__init_sim_loss()
-        self.__init_smooth_loss()
+        self.__init_loss()
         self.__init_optimizer()
         self.__init_logger()
         self.__init_es()
@@ -52,24 +53,26 @@ class baseTrainer:
 
         print("...done")
 
-    def __init_sim_loss(self):
-        print(f"Initiate {self.loss} similarity loss", end=" ")
-        if self.loss == "NCC":
-            self.sim_loss = NCC()
-        elif self.loss == "Dice":
-            self.sim_loss = Dice()
-        elif self.loss == "SAD":
-            self.sim_loss = SAD()
-        elif self.loss == "MSE":
-            self.sim_loss = MSE()
-        else:
-            raise NotImplementedError
-
-        print("...done")
-
-    def __init_smooth_loss(self):
-        print(f"Initiate smoothness loss", end=" ")
-        self.smooth_loss = smoothLoss()
+    def __init_loss(self):
+        print(f"Initiate {self.loss} loss with weight {self.loss_weight}", end=" ")
+        self.loss_weight = self.loss_weight / np.sum(self.loss_weight)
+        assert len(self.loss) == len(
+            self.loss_weight
+        ), "Loss and loss weight must have the same length"
+        self.loss_fn = {}
+        for l, lw in zip(self.loss, self.loss_weight):
+            if l == "NCC":
+                self.loss_fn[l] = [NCC(), lw]
+            elif l == "Smooth":
+                self.loss_fn[l] = [smoothLoss(), lw]
+            elif l == "Dice":
+                self.loss_fn[l] = [Dice(), lw]
+            elif l == "MSE":
+                self.loss_fn[l] = [MSE(), lw]
+            elif l == "SAD":
+                self.loss_fn[l] = [SAD(), lw]
+            else:
+                raise NotImplementedError
         print("...done")
 
     def __init_model(self):
@@ -124,8 +127,8 @@ class Trainer(baseTrainer):
     def __init__(self, args):
         super(Trainer, self).__init__(args)
         self.epochs = args.epochs
-        self.smooth_w = args.smooth_w
         self.ckpt_path = os.path.join(args.exp_dir, "checkpoint.pt")
+        self.save_df = args.save_df
 
     def train(
         self,
@@ -137,7 +140,7 @@ class Trainer(baseTrainer):
         for i in range(self.epochs):
             # training
             train_loss_sum = 0
-            train_jac_det, train_tre, train_dice = [], [], []
+            #train_jac_det, train_tre, train_dice = [], [], []
             for batch_idx, (
                 fixed_img,
                 moving_img,
@@ -171,17 +174,22 @@ class Trainer(baseTrainer):
                 # train_tre.extend(batch_tre)
                 # train_dice.extend(batch_dice)
 
-                train_loss = self.sim_loss(
-                    fixed_img, moving_reg
-                ) + self.smooth_w * self.smooth_loss(rf)
+                train_loss = self.__compute_loss(
+                    self.loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf
+                )
+
                 train_loss.backward()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
                 train_loss_sum += train_loss.item()
 
-                # training progess - per 10 batches
-                if batch_idx % 20 == 0:
-                    print(f"----batch {batch_idx}----")
+                # training progess batch and loss
+                if batch_idx % self.print_every == 0:
+                    print(
+                        "Batch {} - Train Loss: {:.6f}".format(
+                            batch_idx, train_loss.item()
+                        )
+                    )
 
             train_loss_mean = train_loss_sum / len(train_loader)
             # train_jac_det_mean = np.mean(train_jac_det)
@@ -212,7 +220,7 @@ class Trainer(baseTrainer):
 
     def __eval(self, cur, val_loader: torch.utils.data.DataLoader):
         val_loss_sum = 0
-        val_jac_det, val_tre, val_dice = [], [], []
+        val_jac_det, val_jac_det_std, val_tre, val_dice = [], [], [], []
         self.model.eval()
         with torch.no_grad():
             for batch_idx, (
@@ -244,24 +252,36 @@ class Trainer(baseTrainer):
                 )
 
                 # compute metrics
-                batch_jac_det, batch_tre, batch_dice = self.__compute_metrics(
+                (
+                    batch_jac_det,
+                    batch_jac_det_std,
+                    batch_tre,
+                    batch_dice,
+                ) = self.__compute_metrics(
                     D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
                 )
                 val_jac_det.extend(batch_jac_det)
+                val_jac_det_std.extend(batch_jac_det_std)
                 val_tre.extend(batch_tre)
                 val_dice.extend(batch_dice)
 
-                val_loss = self.sim_loss(
-                    fixed_img, moving_reg
-                ) + self.smooth_w * self.smooth_loss(rf)
+                val_loss = self.__compute_loss(
+                    self.loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf
+                )
                 val_loss_sum += val_loss.item()
         val_loss_mean = val_loss_sum / len(val_loader)
+
         val_jac_det_mean = np.mean(val_jac_det)
+        val_jac_det_std_mean = np.mean(val_jac_det_std)
         val_tre_mean = np.mean(val_tre)
         val_dice_mean = np.mean(val_dice)
         print(
-            "Validation Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}".format(
-                val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean
+            "Validation Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}; JacDetStd: {:6f}".format(
+                val_loss_mean,
+                val_dice_mean,
+                val_tre_mean,
+                val_jac_det_mean,
+                val_jac_det_std_mean,
             )
         )
 
@@ -270,6 +290,7 @@ class Trainer(baseTrainer):
             self.writer.add_scalar("val/dice", val_dice_mean, cur)
             self.writer.add_scalar("val/tre", val_tre_mean, cur)
             self.writer.add_scalar("val/jac_det", val_jac_det_mean, cur)
+            self.writer.add_scalar("val/jac_det_std", val_jac_det_std_mean, cur)
 
         # early stopping
         if self.es:
@@ -283,14 +304,14 @@ class Trainer(baseTrainer):
         else:
             return False
 
-    def predict(self, val_loader):
+    def predict(self, val_loader: torch.utils.data.DataLoader):
         # load final model
         print("----Load Model Checkpoint----")
         self.model.load_state_dict(torch.load(self.ckpt_path))
         self.model.eval()
 
         val_loss_sum = 0
-        val_jac_det, val_tre, val_dice = [], [], []
+        val_jac_det, val_jac_det_std, val_tre, val_dice = [], [], [], []
         with torch.no_grad():
             for batch_idx, (
                 fixed_img,
@@ -321,34 +342,67 @@ class Trainer(baseTrainer):
                 )
 
                 # compute metrics
-                batch_jac_det, batch_tre, batch_dice = self.__compute_metrics(
+                (
+                    batch_jac_det,
+                    batch_jac_det_std,
+                    batch_tre,
+                    batch_dice,
+                ) = self.__compute_metrics(
                     D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
                 )
                 val_jac_det.extend(batch_jac_det)
+                val_jac_det_std.extend(batch_jac_det_std)
                 val_tre.extend(batch_tre)
                 val_dice.extend(batch_dice)
 
-                val_loss = self.sim_loss(
-                    fixed_img, moving_reg
-                ) + self.smooth_w * self.smooth_loss(rf)
+                val_loss = self.__compute_loss(
+                    self.loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf
+                )
+
                 val_loss_sum += val_loss.item()
+
+                #save displacement field - need to double check with learn2reg
+                if self.save_df:
+                    os.makedirs(os.path.join(self.exp_dir, "displacement_field"), exist_ok=True)
+                    for iidx, subject in enumerate(val_loader.dataset.subjects[batch_idx*val_loader.batch_size:(batch_idx+1)*val_loader.batch_size]):
+                        subject_id = subject["moving"].split("/")[-1].split("_")[1]
+                        np.save(
+                            os.path.join(
+                                self.exp_dir,
+                                "displacement_field",
+                                "disp_NLST_{}.npy".format(subject_id), #need to change when doing another task
+                            ),
+                            D_rf[iidx].permute(1, 2, 3, 0).detach().cpu().numpy(),
+                        )
+
         val_loss_mean = val_loss_sum / len(val_loader)
         val_jac_det_mean = np.mean(val_jac_det)
+        val_jac_det_std_mean = np.mean(val_jac_det_std)
         val_tre_mean = np.mean(val_tre)
         val_dice_mean = np.mean(val_dice)
 
         print(
-            "Final Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}".format(
-                val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean
+            "Validation Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}; JacDetStd: {:6f}".format(
+                val_loss_mean,
+                val_dice_mean,
+                val_tre_mean,
+                val_jac_det_mean,
+                val_jac_det_std_mean,
             )
         )
 
         # save results
         results = pd.DataFrame(
             {
-                "val": [val_loss_mean, val_dice_mean, val_tre_mean, val_jac_det_mean],
+                "val": [
+                    val_loss_mean,
+                    val_dice_mean,
+                    val_tre_mean,
+                    val_jac_det_mean,
+                    val_jac_det_std_mean,
+                ],
             },
-            index=["loss", "dice", "tre", "jac_det"],
+            index=["loss", "dice", "tre", "jac_det", "jac_det_std"],
         )
 
         return results
@@ -357,11 +411,11 @@ class Trainer(baseTrainer):
     def __compute_metrics(
         D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
     ):
-        batch_jac_det, batch_tre, batch_dice = [], [], []
+        batch_jac_det, batch_jac_det_std, batch_tre, batch_dice = [], [], [], []
 
         for subject_idx in range(len(D_rf)):
             # jacobian determinant
-            jac_det = jacobian_determinant(
+            jac_det, jac_det_std = jacobian_determinant(
                 D_rf[subject_idx : subject_idx + 1].clone().detach().cpu().numpy()
             )
 
@@ -369,7 +423,11 @@ class Trainer(baseTrainer):
             tre = compute_tre(
                 fix_lms=fixed_kp[subject_idx].clone().detach().cpu().numpy(),
                 mov_lms=moving_kp[subject_idx].clone().detach().cpu().numpy(),
-                disp=D_rf[subject_idx].clone().detach().cpu().numpy(),
+                disp=D_rf.permute(0, 2, 3, 4, 1)[subject_idx]
+                .clone()
+                .detach()
+                .cpu()
+                .numpy(),
                 spacing_fix=1.5,
                 spacing_mov=1.5,
             )  # spacing is 1.5 for NLST
@@ -386,6 +444,24 @@ class Trainer(baseTrainer):
                 labels=[1],
             )  # labels is 1 for NLST
             batch_jac_det.append(jac_det)
+            batch_jac_det_std.append(jac_det_std)
             batch_tre.append(tre)
             batch_dice.append(mean_dice)
-        return batch_jac_det, batch_tre, batch_dice
+        return batch_jac_det, batch_jac_det_std, batch_tre, batch_dice
+
+    @staticmethod
+    def __compute_loss(loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf):
+        loss = 0.0
+        for l, lw in loss_fn.items():
+            if l == "NCC":
+                loss += lw[1] * lw[0](fixed_img, moving_reg)
+            elif l == "Smooth":
+                loss += lw[1] * lw[0](rf)
+            elif l == "Dice":
+                loss += lw[1] * lw[0](fixed_mask, moving_mask_reg)
+            elif l == "MSE":
+                loss += lw[1] * lw[0](fixed_img, moving_reg)
+            elif l == "SAD":
+                loss += lw[1] * lw[0](fixed_img, moving_reg)
+
+        return loss

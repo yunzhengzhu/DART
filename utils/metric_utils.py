@@ -82,7 +82,7 @@ def jacobian_determinant(disp):
         )
     )
 
-    return jacdet
+    return (jacdet <= 0).astype(float).sum(), jacdet.std()
 
 
 def compute_tre(fix_lms, mov_lms, disp, spacing_fix, spacing_mov):
@@ -95,7 +95,7 @@ def compute_tre(fix_lms, mov_lms, disp, spacing_fix, spacing_mov):
 
     fix_lms_warped = fix_lms + fix_lms_disp
 
-    return np.linalg.norm((fix_lms_warped - mov_lms) * spacing_mov, axis=1)
+    return np.linalg.norm((fix_lms_warped - mov_lms) * spacing_mov, axis=2).mean(1)
 
 
 def compute_dice_coefficient(mask_gt, mask_pred):

@@ -16,6 +16,12 @@ def argParser():
         default=None,
         help="path to experiment directory",
     )
+    parser.add_argument(
+        "--save_df",
+        action="store_true",
+        default=False,
+        help="save displacement field",
+    )
     args = parser.parse_args()
     return args
 
@@ -25,7 +31,8 @@ def main(args):
     with open(os.path.join(args.exp_dir, "args.json"), "r") as file:
         loaded_args = json.load(file)
     for key, value in loaded_args.items():
-        setattr(args, key, value)
+        if key not in ["exp_dir", "save_df"]:
+            setattr(args, key, value)
 
     # create save directory
     args.save_dir = os.path.join(args.exp_dir, "eval")

@@ -64,7 +64,7 @@ class NLSTDataset(Dataset):
         return fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask
 
     @staticmethod
-    def __load_nii_img(img_path, preprocess=False):
+    def __load_nii_img(img_path, preprocess: bool = False):
         img = nib.load(img_path)
         arr = img.get_fdata()
 

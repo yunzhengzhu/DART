@@ -11,6 +11,7 @@ from utils.train_utils import set_seed, seed_worker
 
 def argParser():
     parser = ArgumentParser()
+    # data
     parser.add_argument(
         "--data_dir",
         type=str,
@@ -23,21 +24,30 @@ def argParser():
     parser.add_argument(
         "--result_dir", type=str, default="./results", help="path to output directory"
     )
+    # model
     parser.add_argument("--model_type", type=str, default="LKU-Net", help="model name")
     parser.add_argument(
         "--start_channel", type=int, default=8, help="start channel U-Net"
     )
+    # training
     parser.add_argument(
-        "--loss", type=str, default="NCC", help="similarity loss function"
+        "--loss",
+        nargs="+",
+        help="list of loss",
+        default=["NCC", "Smooth", "Dice"],
+        type=str,
     )
     parser.add_argument(
-        "--smooth_w", type=float, default=0.1, help="smooth loss weight"
+        "--loss_weight",
+        nargs="+",
+        help="list of loss weight",
+        default=[1.0, 1.0, 1.0],
+        type=float,
     )
     parser.add_argument("--opt", type=str, default="adam", help="optimizer")
     parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
     parser.add_argument("--batch_size", type=int, default=1, help="batch size")
     parser.add_argument("--epochs", type=int, default=100, help="number of epochs")
-    parser.add_argument("--seed", type=int, default=0, help="random seed")
     parser.add_argument(
         "--es", action="store_true", default=False, help="early stopping"
     )
@@ -50,6 +60,16 @@ def argParser():
     parser.add_argument(
         "--log", action="store_true", default=False, help="log training"
     )
+    parser.add_argument(
+        "--print_every", type=int, default=10, help="print every n batches"
+    )
+    parser.add_argument("--seed", type=int, default=0, help="random seed")
+    parser.add_argument(
+        "--save_df",
+        action="store_true",
+        default=False,
+        help="save displacement field",
+    )
     args = parser.parse_args()
     return args
 
@@ -59,7 +79,7 @@ def main(args):
     set_seed(args.seed)
 
     # create experiment folder
-    exp_name = f"{args.model_type}_{args.loss}_{args.opt}_lr{args.lr}_bs{args.batch_size}_seed{args.seed}"
+    exp_name = f"{args.model_type}_{'_'.join(args.loss)}_{args.opt}_lr{args.lr}_bs{args.batch_size}_seed{args.seed}"
     exp_dir = os.path.join(args.result_dir, exp_name)
     if not os.path.exists(exp_dir):
         os.makedirs(exp_dir)

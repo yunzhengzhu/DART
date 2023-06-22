@@ -99,7 +99,7 @@ class MSE:
 
 class SAD:
     """
-    Mean squared error loss.
+    Absolute error loss.
     """
 
     def __call__(self, y_true, y_pred):
