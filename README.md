@@ -21,9 +21,9 @@ CUDA_VISIBLE_DEVICES='1' main.py \
 	--seed 1234 \
 	--es \
 	--es_warmup 0 \
-	--es_tolerence 20 \
+	--es_patience 20 \
 	--log \
-	--print_every 10
+	--print_every 20
 ```
 
 **If your training got interupted**
