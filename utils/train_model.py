@@ -116,7 +116,7 @@ class baseTrainer:
                 end=" ",
             )
             self.early_stopping = EarlyStopping(
-                warmup=self.es_warmup, patience =self.es_patience, verbose=True
+                warmup=self.es_warmup, patience=self.es_patience, verbose=True
             )
             print("...done")
         else:
@@ -173,14 +173,14 @@ class Trainer(baseTrainer):
                 )
 
                 # compute metrics
-                #(
+                # (
                 #    batch_jac_det,
                 #    batch_jac_det_std,
                 #    batch_tre,
                 #    batch_dice,
-                #) = self.__compute_metrics(
+                # ) = self.__compute_metrics(
                 #    D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
-                #)
+                # )
                 # train_jac_det.extend(batch_jac_det)
                 # train_tre.extend(batch_tre)
                 # train_dice.extend(batch_dice)
@@ -193,10 +193,8 @@ class Trainer(baseTrainer):
                 self.optimizer.step()
                 self.optimizer.zero_grad()
                 train_loss_sum += train_loss.item()
-                for l , loss_value in train_sub_loss_sum.items():
-                    train_sub_loss_sum[l] = (
-                        loss_value + train_all_loss[l]
-                    )
+                for l, loss_value in train_sub_loss_sum.items():
+                    train_sub_loss_sum[l] = loss_value + train_all_loss[l]
 
                 # training progess batch and loss
                 if batch_idx % self.print_every == 0:
@@ -206,46 +204,46 @@ class Trainer(baseTrainer):
                         )
                     )
                     for l in self.loss:
-                        print('\t\t |- {} loss: {:.6f}'.format(l, train_all_loss[l]))
-
-
+                        print("\t\t |- {} loss: {:.6f}".format(l, train_all_loss[l]))
 
             train_loss_mean = train_loss_sum / len(train_loader)
-            train_sub_loss_mean = {l: loss_value/ len(train_loader) for l, loss_value in train_sub_loss_sum.items()}
+            train_sub_loss_mean = {
+                l: loss_value / len(train_loader)
+                for l, loss_value in train_sub_loss_sum.items()
+            }
 
             # train_jac_det_mean = np.mean(train_jac_det)
             # train_tre_mean = np.mean(train_tre)
             # train_dice_mean = np.mean(train_dice)
             # print("Epoch {} - Train Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}".format(i, train_loss_mean, train_jac_det_mean, train_tre_mean, train_dice_mean))
             print("Epoch {} - Train Loss: {:.6f}".format(i, train_loss_mean))
-            for l , tlm in train_sub_loss_mean.items():
-                print('\t\t |- {} loss: {:.6f}'.format(l, tlm))
+            for l, tlm in train_sub_loss_mean.items():
+                print("\t\t |- {} loss: {:.6f}".format(l, tlm))
 
             # log training
             if self.writer:
                 self.writer.add_scalar("train/Total_loss", train_loss_mean, i)
-                for l , tlm in train_sub_loss_mean.items():
+                for l, tlm in train_sub_loss_mean.items():
                     self.writer.add_scalar("train/{}_loss".format(l), tlm, i)
 
             # validation
             earlystop = self.__eval(i, val_loader)
 
+            # save model for each epoch
+            state = {
+                "epoch": i + 1,
+                "model": self.model.state_dict(),
+                "optimizer": self.optimizer.state_dict(),
+                "early_stopping": self.early_stopping,
+                #'logger': self.writer
+            }
 
-            #save model for each epoch
-            state = {'epoch': i+1, 
-                     'model': self.model.state_dict(), 
-                     'optimizer': self.optimizer.state_dict(), 
-                     'early_stopping': self.early_stopping,
-                     #'logger': self.writer
-                     }
-            
             torch.save(state, self.ckpt_path)
 
             if earlystop:
                 break
 
-
-        print('Finished Training...')
+        print("Finished Training...")
         results = self.predict(val_loader)
 
         if self.writer:
@@ -305,14 +303,14 @@ class Trainer(baseTrainer):
                     self.loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf
                 )
                 val_loss_sum += val_loss.item()
-                for l , loss_value in val_sub_loss_sum.items():
-                    val_sub_loss_sum[l] = (
-                        loss_value + val_all_loss[l]
-                    )
-
+                for l, loss_value in val_sub_loss_sum.items():
+                    val_sub_loss_sum[l] = loss_value + val_all_loss[l]
 
         val_loss_mean = val_loss_sum / len(val_loader)
-        val_sub_loss_mean = {l: loss_value / len(val_loader) for l, loss_value in val_sub_loss_sum.items()}
+        val_sub_loss_mean = {
+            l: loss_value / len(val_loader)
+            for l, loss_value in val_sub_loss_sum.items()
+        }
 
         val_num_foldings_mean = np.mean(val_num_foldings)
         val_log_jac_det_std_mean = np.mean(val_log_jac_det_std)
@@ -320,7 +318,7 @@ class Trainer(baseTrainer):
         val_dice_mean = np.mean(val_dice)
         print("Epoch {} - Validation Loss : {:.6f}".format(cur, val_loss_mean))
         for l, vslm in val_sub_loss_mean.items():
-            print('\t\t |- {} loss: {:.6f}'.format(l, vslm))
+            print("\t\t |- {} loss: {:.6f}".format(l, vslm))
         print(
             "\t\tDice: {:.6f}; TRE: {:.6f}; NumFold: {:.6f}; LogJacDetStd: {:6f}".format(
                 val_dice_mean,
@@ -359,7 +357,7 @@ class Trainer(baseTrainer):
             ckpt_path = self.es_ckpt_path
 
         print("=== Load model from {} ===".format(ckpt_path))
-        self.model.load_state_dict(torch.load(ckpt_path)['state_dict'])
+        self.model.load_state_dict(torch.load(ckpt_path)["state_dict"])
         self.model.eval()
 
         val_loss_sum = 0
@@ -412,10 +410,8 @@ class Trainer(baseTrainer):
                     self.loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf
                 )
                 val_loss_sum += val_loss.item()
-                for l , loss_value in val_sub_loss_sum.items():
-                    val_sub_loss_sum[l] = (
-                        loss_value + val_all_loss[l]
-                    )
+                for l, loss_value in val_sub_loss_sum.items():
+                    val_sub_loss_sum[l] = loss_value + val_all_loss[l]
 
                 # save displacement field - need to double check with learn2reg
                 if self.save_df:
@@ -442,7 +438,9 @@ class Trainer(baseTrainer):
                         )
 
         val_loss_mean = val_loss_sum / len(val_loader)
-        val_sub_loss_mean = {l: vsls / len(val_loader) for l, vsls in val_sub_loss_sum.items()}
+        val_sub_loss_mean = {
+            l: vsls / len(val_loader) for l, vsls in val_sub_loss_sum.items()
+        }
         val_num_foldings_mean = np.mean(val_num_foldings)
         val_log_jac_det_std_mean = np.mean(val_log_jac_det_std)
         val_tre_mean = np.mean(val_tre)
@@ -450,7 +448,7 @@ class Trainer(baseTrainer):
 
         print("Final validation Loss : {:.6f}".format(val_loss_mean))
         for l, vslm in val_sub_loss_mean.items():
-            print('\t\t |- {} loss : {:.6f}'.format(l, vslm))
+            print("\t\t |- {} loss : {:.6f}".format(l, vslm))
         print(
             "\t\tDice: {:.6f}; TRE: {:.6f}; NumFold: {:.6f}; LogJacDetStd: {:6f}".format(
                 val_dice_mean,
@@ -473,9 +471,7 @@ class Trainer(baseTrainer):
             },
             index=["loss", "dice", "tre", "num_fold", "log_jac_det_std"],
         )
-        results_sub_loss = pd.DataFrame(
-            val_sub_loss_mean, index=["val"]
-        ).T
+        results_sub_loss = pd.DataFrame(val_sub_loss_mean, index=["val"]).T
         results = pd.concat([results, results_sub_loss], axis=0)
 
         return results
@@ -484,14 +480,19 @@ class Trainer(baseTrainer):
     def __compute_metrics(
         D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
     ):
-        batch_num_foldings, batch_log_jac_det_std, batch_tre, batch_dice = [], [], [], []
+        batch_num_foldings, batch_log_jac_det_std, batch_tre, batch_dice = (
+            [],
+            [],
+            [],
+            [],
+        )
 
         for subject_idx in range(len(D_rf)):
             # jacobian determinant
             num_foldings, log_jac_det_std = jacobian_determinant(
                 D_rf[subject_idx : subject_idx + 1].clone().detach().cpu().numpy()
             )
-            
+
             # TRE keypoints
             tre = compute_tre(
                 fix_lms=fixed_kp[subject_idx].clone().detach().cpu().numpy(),
@@ -549,16 +550,15 @@ class Trainer(baseTrainer):
                 all_loss["SAD"] = sad_loss.item()
 
         return loss, all_loss
-    
+
     def load_prev(self):
-        print('Continue training from checkpoint: {}'.format(self.ckpt_path))
+        print("Continue training from checkpoint: {}".format(self.ckpt_path))
         if os.path.isfile(self.ckpt_path):
             ckpt = torch.load(self.ckpt_path)
-            self.start_epoch = ckpt['epoch']
-            self.model.load_state_dict(ckpt['model'])
-            self.optimizer.load_state_dict(ckpt['optimizer'])
-            #self.writer = ckpt['writer']
-            self.early_stopping = ckpt['early_stopping']
+            self.start_epoch = ckpt["epoch"]
+            self.model.load_state_dict(ckpt["model"])
+            self.optimizer.load_state_dict(ckpt["optimizer"])
+            # self.writer = ckpt['writer']
+            self.early_stopping = ckpt["early_stopping"]
         else:
             raise ValueError("No checkpoint found at '{}'".format(self.ckpt_path))
-

@@ -72,7 +72,7 @@ def argParser():
         help="save displacement field",
     )
 
-    #continue training if your model is interrupted
+    # continue training if your model is interrupted
     parser.add_argument(
         "--continue_training",
         action="store_true",
@@ -102,13 +102,13 @@ def main(args):
         # update args
         for key, value in prev_args.items():
             if key not in ["continue_training", "exp_dir", "epochs"]:
-                setattr(args, key, value)        
+                setattr(args, key, value)
 
         # init model
         model = Trainer(args)
         # load checkpoint
         model.load_prev()
-    
+
     else:
         # create experiment folder
         exp_name = f"{args.model_type}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_seed{args.seed}"

@@ -37,7 +37,7 @@ def main(args):
 
     # create save directory
     args.save_dir = os.path.join(args.exp_dir, "eval")
-    if not os.path.exists(args.save_dir): 
+    if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
 
     # init model

@@ -66,4 +66,4 @@ class EarlyStopping:
             print(
                 f"Validation loss decreased from {self.lowest_val_loss:.6f} to {val_loss:.6f}. Model saved."
             )
-        torch.save({'state_dict': model.state_dict()}, ckpt_path)
+        torch.save({"state_dict": model.state_dict()}, ckpt_path)
