@@ -55,7 +55,7 @@ class baseTrainer:
 
     def __init_loss(self):
         print(f"Initiate {self.loss} loss with weight {self.loss_weight}", end=" ")
-        self.loss_weight = self.loss_weight / np.sum(self.loss_weight)
+        #self.loss_weight = self.loss_weight / np.sum(self.loss_weight)
         assert len(self.loss) == len(
             self.loss_weight
         ), "Loss and loss weight must have the same length"
@@ -529,24 +529,24 @@ class Trainer(baseTrainer):
         all_loss = {}
         for l, lw in loss_fn.items():
             if l == "NCC":
-                ncc_loss = lw[0](fixed_img, moving_reg)
-                loss += lw[1] * ncc_loss
+                ncc_loss = lw[0](fixed_img, moving_reg) * lw[1]
+                loss += ncc_loss
                 all_loss["NCC"] = ncc_loss.item()
             elif l == "Smooth":
-                smooth_loss = lw[0](rf)
-                loss += lw[1] * smooth_loss
+                smooth_loss = lw[0](rf) * lw[1]
+                loss += smooth_loss
                 all_loss["Smooth"] = smooth_loss.item()
             elif l == "Dice":
-                dice_loss = lw[0](fixed_mask, moving_mask_reg)
-                loss += lw[1] * dice_loss
+                dice_loss = lw[0](fixed_mask, moving_mask_reg) * lw[1]
+                loss += dice_loss
                 all_loss["Dice"] = dice_loss.item()
             elif l == "MSE":
-                mse_loss = lw[0](fixed_img, moving_reg)
-                loss += lw[1] * mse_loss
+                mse_loss = lw[0](fixed_img, moving_reg) * lw[1]
+                loss += mse_loss
                 all_loss["MSE"] = mse_loss.item()
             elif l == "SAD":
-                sad_loss = lw[0](fixed_img, moving_reg)
-                loss += lw[1] * sad_loss
+                sad_loss = lw[0](fixed_img, moving_reg) * lw[1]
+                loss += sad_loss
                 all_loss["SAD"] = sad_loss.item()
 
         return loss, all_loss
