@@ -71,6 +71,20 @@ def argParser():
         default=False,
         help="save displacement field",
     )
+
+    #continue training if your model is interrupted
+    parser.add_argument(
+        "--continue_training",
+        action="store_true",
+        default=False,
+        help="continue training",
+    )
+    parser.add_argument(
+        "--exp_dir",
+        type=str,
+        default=None,
+        help="path to checkpoint",
+    )
     args = parser.parse_args()
     return args
 
@@ -79,18 +93,35 @@ def main(args):
     # set seed
     set_seed(args.seed)
 
-    # create experiment folder
-    exp_name = f"{args.model_type}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_seed{args.seed}"
-    exp_dir = os.path.join(args.result_dir, exp_name)
-    if not os.path.exists(exp_dir):
-        os.makedirs(exp_dir)
-    args.exp_dir = exp_dir
-    # save args json
-    with open(os.path.join(args.exp_dir, "args.json"), "w") as f:
-        json.dump(vars(args), f, indent=4)
+    # continue training on previous checkpoint
+    if args.continue_training:
+        # load args json
+        with open(os.path.join(args.exp_dir, "args.json"), "r") as f:
+            prev_args = json.load(f)
 
-    # init model
-    model = Trainer(args)
+        # update args
+        for key, value in prev_args.items():
+            if key not in ["continue_training", "exp_dir", "epochs"]:
+                setattr(args, key, value)        
+
+        # init model
+        model = Trainer(args)
+        # load checkpoint
+        model.load_prev()
+    
+    else:
+        # create experiment folder
+        exp_name = f"{args.model_type}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_seed{args.seed}"
+        exp_dir = os.path.join(args.result_dir, exp_name)
+        if not os.path.exists(exp_dir):
+            os.makedirs(exp_dir)
+        args.exp_dir = exp_dir
+        # save args json
+        with open(os.path.join(args.exp_dir, "args.json"), "w") as f:
+            json.dump(vars(args), f, indent=4)
+
+        # init model
+        model = Trainer(args)
     # init dataset
     train_dataset = NLSTDataset(
         data_dir=args.data_dir, json_file=args.json_file, mode="train"

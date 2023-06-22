@@ -126,8 +126,10 @@ class baseTrainer:
 class Trainer(baseTrainer):
     def __init__(self, args) -> None:
         super(Trainer, self).__init__(args)
+        self.start_epoch = 0
         self.epochs = args.epochs
-        self.ckpt_path = os.path.join(args.exp_dir, "checkpoint.pt")
+        self.ckpt_path = os.path.join(args.exp_dir, "checkpoint.pth.tar")
+        self.es_ckpt_path = os.path.join(args.exp_dir, "es_checkpoint.pth.tar")
         self.save_df = args.save_df
 
     def train(
@@ -137,7 +139,7 @@ class Trainer(baseTrainer):
     ) -> pd.DataFrame:
         self.model.train()
         # loop through epochs
-        for i in range(self.epochs):
+        for i in range(self.start_epoch, self.epochs):
             print(f"------------Epoch {i+1}/{self.epochs}------------")
             # training
             train_loss_sum = 0
@@ -206,6 +208,8 @@ class Trainer(baseTrainer):
                     for l in self.loss:
                         print('\t\t |- {} loss: {:.6f}'.format(l, train_all_loss[l]))
 
+
+
             train_loss_mean = train_loss_sum / len(train_loader)
             train_sub_loss_mean = {l: loss_value/ len(train_loader) for l, loss_value in train_sub_loss_sum.items()}
 
@@ -225,12 +229,21 @@ class Trainer(baseTrainer):
 
             # validation
             earlystop = self.__eval(i, val_loader)
+
+
+            #save model for each epoch
+            state = {'epoch': i+1, 
+                     'model': self.model.state_dict(), 
+                     'optimizer': self.optimizer.state_dict(), 
+                     'early_stopping': self.early_stopping,
+                     #'logger': self.writer
+                     }
+            
+            torch.save(state, self.ckpt_path)
+
             if earlystop:
                 break
 
-        # if no earlystopping, we save the weights of the last epoch
-        if not self.es or i < self.warmup:
-            torch.save(self.model.state_dict(), self.ckpt_path)
 
         print('Finished Training...')
         results = self.predict(val_loader)
@@ -332,7 +345,7 @@ class Trainer(baseTrainer):
                 epoch=cur,
                 val_loss=val_loss_mean,
                 model=self.model,
-                ckpt_path=self.ckpt_path,
+                ckpt_path=self.es_ckpt_path,
             )
             return earlystop
         else:
@@ -340,8 +353,13 @@ class Trainer(baseTrainer):
 
     def predict(self, val_loader: torch.utils.data.DataLoader) -> pd.DataFrame:
         # load final model
-        print("-------Load Final Model Checkpoint-------")
-        self.model.load_state_dict(torch.load(self.ckpt_path))
+        if self.es:
+            ckpt_path = self.es_ckpt_path
+        else:
+            ckpt_path = self.es_ckpt_path
+
+        print("=== Load model from {} ===".format(ckpt_path))
+        self.model.load_state_dict(torch.load(ckpt_path)['state_dict'])
         self.model.eval()
 
         val_loss_sum = 0
@@ -531,3 +549,16 @@ class Trainer(baseTrainer):
                 all_loss["SAD"] = sad_loss.item()
 
         return loss, all_loss
+    
+    def load_prev(self):
+        print('Continue training from checkpoint: {}'.format(self.ckpt_path))
+        if os.path.isfile(self.ckpt_path):
+            ckpt = torch.load(self.ckpt_path)
+            self.start_epoch = ckpt['epoch']
+            self.model.load_state_dict(ckpt['model'])
+            self.optimizer.load_state_dict(ckpt['optimizer'])
+            #self.writer = ckpt['writer']
+            self.early_stopping = ckpt['early_stopping']
+        else:
+            raise ValueError("No checkpoint found at '{}'".format(self.ckpt_path))
+
