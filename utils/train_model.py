@@ -138,7 +138,7 @@ class Trainer(baseTrainer):
         self.model.train()
         # loop through epochs
         for i in range(self.epochs):
-            print(f"------------Epoch {i}/{self.epochs}------------")
+            print(f"------------Epoch {i+1}/{self.epochs}------------")
             # training
             train_loss_sum = 0
             train_sub_loss_sum = {l: 0.0 for l in self.loss}
