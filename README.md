@@ -5,39 +5,40 @@
 #### Command line
 
 **For training**
-```
-	CUDA_VISIBLE_DEVICES='1' main.py \
-		--data_dir {DATA_DIR} \
-		--json_file {JSON_FILE} \
-		--result_dir {RESULT_DIR} \
-		--model_type 'LKU-Net' \
-		--start_channel 8 \
-		--loss 'NCC' 'Smooth' \
-		--loss_weight 1.0 0.25 \
-		--opt 'adam' \
-		--lr 1e-3 \
-		--batch_size 1 \
-		--epochs 5 \
-		--seed 1234 \
-		--es \
-		--es_warmup 0 \
-		--es_tolerence 20 \
-		--log \
-		--print_every 10
+```bash
+CUDA_VISIBLE_DEVICES='1' main.py \
+	--data_dir {DATA_DIR} \
+	--json_file {JSON_FILE} \
+	--result_dir {RESULT_DIR} \
+	--model_type 'LKU-Net' \
+	--start_channel 8 \
+	--loss 'NCC' 'Smooth' \
+	--loss_weight 1.0 0.25 \
+	--opt 'adam' \
+	--lr 1e-3 \
+	--batch_size 1 \
+	--epochs 5 \
+	--seed 1234 \
+	--es \
+	--es_warmup 0 \
+	--es_tolerence 20 \
+	--log \
+	--print_every 10
 ```
 
 **If your training got interupted**
-```	CUDA_VISIBLE_DEVICES='1' main.py \
-		--continue_training \
-    --exp_dir {EXPERIMENT_DIR} \
-    --epochs 10 #total num epochs (required - otherwise it will be default 100)
+```bash
+CUDA_VISIBLE_DEVICES='1' main.py \
+	--continue_training \
+	--exp_dir {EXPERIMENT_DIR} \
+	--epochs 10 #total num epochs (required - otherwise it will be default 100)
 ```
 
 **For inference**
-```
-	CUDA_VISIBLE_DEVICES='1' eval.py \
-		--exp_dir {EXPERIMENT_DIR} \
-		--save_df
+```bash
+CUDA_VISIBLE_DEVICES='1' eval.py \
+	--exp_dir {EXPERIMENT_DIR} \
+	--save_df
 ```
 
 #### TODO
