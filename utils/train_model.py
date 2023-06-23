@@ -10,7 +10,7 @@ import math
 from argparse import ArgumentParser
 from model.lkunet import LKUNet
 from model.transform import SpatialTransform, DiffeomorphicTransform
-from utils.loss_utils import smoothLoss, NCC, Dice, MSE, SAD
+from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD
 from utils.train_utils import EarlyStopping
 from utils.metric_utils import jacobian_determinant, compute_tre, compute_dice
 from tensorboardX import SummaryWriter
@@ -88,6 +88,8 @@ class baseTrainer:
         for l, lw in zip(self.loss, self.loss_weight):
             if l == "NCC":
                 self.loss_fn[l] = [NCC(), lw]
+            elif l == "GNCC":
+                self.loss_fn[l] = [GNCC(), lw]
             elif l == "Smooth":
                 self.loss_fn[l] = [smoothLoss(), lw]
             elif l == "Dice":
@@ -566,6 +568,10 @@ class Trainer(baseTrainer):
                 ncc_loss = lw[0](fixed_img, moving_reg) * lw[1]
                 loss += ncc_loss
                 all_loss["NCC"] = ncc_loss.item()
+            elif l == "GNCC":
+                gncc_loss = lw[0](fixed_img, moving_reg) * lw[1]
+                loss += gncc_loss
+                all_loss["GNCC"] = gncc_loss.item()
             elif l == "Smooth":
                 smooth_loss = lw[0](rf) * lw[1]
                 loss += smooth_loss

@@ -18,7 +18,7 @@ class smoothLoss:
 
 
 """
-Normalized local cross-correlation function in Pytorch. Modified from https://github.com/voxelmorph/voxelmorph.
+Normalized local cross-correlation (or Local NCC) function in Pytorch. Modified from https://github.com/voxelmorph/voxelmorph.
 """
 
 
@@ -72,6 +72,50 @@ class NCC(torch.nn.Module):
 
         # return negative cc.
         return -1.0 * torch.mean(cc)
+
+
+"""
+Global normalized local cross-correlation function in Pytorch. Modified from https://github.com/voxelmorph/voxelmorph.
+"""
+
+
+class GNCC(torch.nn.Module):
+    """
+    global normalized cross correlation
+    """
+
+    def __init__(self, win=9, eps=1e-5):
+        super(GNCC, self).__init__()
+        self.eps = eps
+
+    def forward(self, I, J):
+        ndims = 3
+
+        # compute CC squares
+        I2 = I * I
+        J2 = J * J
+        IJ = I * J
+
+        # compute global sums
+        I_sum = torch.sum(I)
+        J_sum = torch.sum(J)
+        I2_sum = torch.sum(I2)
+        J2_sum = torch.sum(J2)
+        IJ_sum = torch.sum(IJ)
+
+        # compute cross correlation
+        win_size = torch.prod(torch.Tensor([I.shape[-ndims:]]))
+        u_I = I_sum / win_size
+        u_J = J_sum / win_size
+
+        cross = IJ_sum - u_J * I_sum - u_I * J_sum + u_I * u_J * win_size
+        I_var = I2_sum - 2 * u_I * I_sum + u_I * u_I * win_size
+        J_var = J2_sum - 2 * u_J * J_sum + u_J * u_J * win_size
+
+        cc = cross * cross / (I_var * J_var + self.eps)
+
+        # return negative cc.
+        return -1.0 * cc
 
 
 class Dice:
