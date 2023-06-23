@@ -40,6 +40,7 @@ class baseTrainer:
         self.log = args.log
         self.print_every = args.print_every
         self.diff = args.diff
+        self.pretrained = args.pretrained
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -122,6 +123,11 @@ class baseTrainer:
         else:
             raise NotImplementedError
         print("...done")
+
+        if self.pretrained:
+            print("Load pretrained model", end=" ")
+            self.model.load_state_dict(torch.load(self.pretrained,map_location='cuda:0'))
+            print("...done")
 
         self.spatial_transform = SpatialTransform()
         self.diff_transform = DiffeomorphicTransform()

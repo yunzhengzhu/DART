@@ -33,6 +33,10 @@ def argParser():
     parser.add_argument(
         "--diff", action="store_true", default=False, help="use DiffeomorphicTransform"
     )
+    parser.add_argument(
+        "--pretrained",type=str, default=None, help="path to pretrained model"
+    )
+
     # training
     parser.add_argument(
         "--loss",
