@@ -30,6 +30,9 @@ def argParser():
     parser.add_argument(
         "--start_channel", type=int, default=8, help="start channel U-Net"
     )
+    parser.add_argument(
+        "--diff", action="store_true", default=False, help="use DiffeomorphicTransform"
+    )
     # training
     parser.add_argument(
         "--loss",
@@ -123,9 +126,15 @@ def main(args):
             exp_name = f"{args.model_type}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_sche{args.sche}_lrf{args.lrf}_bs{args.batch_size}_seed{args.seed}"
         else:
             exp_name = f"{args.model_type}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_seed{args.seed}"
+        
+        if args.diff:
+            exp_name += "_difftrans"
+
         exp_dir = os.path.join(args.result_dir, exp_name)
         if not os.path.exists(exp_dir):
             os.makedirs(exp_dir)
+        else:
+            raise ValueError("Experiment folder already exists!")
         args.exp_dir = exp_dir
         # save args json
         with open(os.path.join(args.exp_dir, "args.json"), "w") as f:

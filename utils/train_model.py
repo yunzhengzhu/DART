@@ -39,6 +39,7 @@ class baseTrainer:
         self.exp_dir = args.exp_dir
         self.log = args.log
         self.print_every = args.print_every
+        self.diff = args.diff
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -200,7 +201,10 @@ class Trainer(baseTrainer):
                 ), moving_mask.float().to(self.device)
 
                 rf = self.model(moving_img, fixed_img)
-                D_rf = self.diff_transform(rf)
+                if self.diff:
+                    D_rf = self.diff_transform(rf)
+                else:
+                    D_rf = rf
                 moving_reg = self.spatial_transform(
                     moving_img, D_rf.permute(0, 2, 3, 4, 1)
                 )
@@ -334,7 +338,10 @@ class Trainer(baseTrainer):
 
                 # pass data to model
                 rf = self.model(moving_img, fixed_img)
-                D_rf = self.diff_transform(rf)
+                if self.diff:
+                    D_rf = self.diff_transform(rf)
+                else:
+                    D_rf = rf
                 moving_reg = self.spatial_transform(
                     moving_img, D_rf.permute(0, 2, 3, 4, 1)
                 )
@@ -447,7 +454,11 @@ class Trainer(baseTrainer):
 
                 # pass data to model
                 rf = self.model(moving_img, fixed_img)
-                D_rf = self.diff_transform(rf)
+                if self.diff:
+                    D_rf = self.diff_transform(rf)
+                else:
+                    D_rf = rf
+                
                 moving_reg = self.spatial_transform(
                     moving_img, D_rf.permute(0, 2, 3, 4, 1)
                 )
@@ -566,7 +577,7 @@ class Trainer(baseTrainer):
             tre = compute_tre(
                 fix_lms=fixed_kp[subject_idx].clone().detach().cpu().numpy(),
                 mov_lms=moving_kp[subject_idx].clone().detach().cpu().numpy(),
-                disp=D_rf.permute(0, 2, 3, 4, 1)[subject_idx]
+                disp= D_rf.permute(0, 2, 3, 4, 1)[subject_idx] 
                 .clone()
                 .detach()
                 .cpu()
@@ -574,6 +585,7 @@ class Trainer(baseTrainer):
                 spacing_fix=1.5,
                 spacing_mov=1.5,
             )  # spacing is 1.5 for NLST
+
 
             # Dice masks
             mean_dice, dice = compute_dice(
