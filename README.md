@@ -56,6 +56,7 @@ CUDA_VISIBLE_DEVICES='1' eval.py \
   - [ ] transmorph
 - Loss Functions
   - [x] NCC
+  - [x] GNCC
   - [x] MSE
   - [x] Dice
   - [x] SAD
@@ -73,5 +74,5 @@ CUDA_VISIBLE_DEVICES='1' eval.py \
 
 - Others
   - [ ] need to double check displacement field saved format in learn2reg 
-  - [ ] add scheduler
+  - [x] add scheduler (cosine, lambdacosine)
   - [ ] train val split
