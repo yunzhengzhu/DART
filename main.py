@@ -47,8 +47,15 @@ def argParser():
     )
     parser.add_argument("--opt", type=str, default="adam", help="optimizer")
     parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
+    parser.add_argument("--sche", type=str, default=None, help="scheduler")
     parser.add_argument("--batch_size", type=int, default=1, help="batch size")
     parser.add_argument("--epochs", type=int, default=100, help="number of epochs")
+    parser.add_argument(
+        "--max_epoch", type=int, default=100, help="maximum number of epochs for scheduler"
+    )
+    parser.add_argument(
+        "--lrf", type=float, default=None, help="learning rate factor"
+    )
     parser.add_argument(
         "--es", action="store_true", default=False, help="early stopping"
     )
@@ -111,7 +118,10 @@ def main(args):
 
     else:
         # create experiment folder
-        exp_name = f"{args.model_type}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_seed{args.seed}"
+        if args.sche:
+            exp_name = f"{args.model_type}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_sche{args.sche}_lrf{args.lrf}_bs{args.batch_size}_seed{args.seed}"
+        else:
+            exp_name = f"{args.model_type}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_seed{args.seed}"
         exp_dir = os.path.join(args.result_dir, exp_name)
         if not os.path.exists(exp_dir):
             os.makedirs(exp_dir)

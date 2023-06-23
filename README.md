@@ -19,12 +19,16 @@ CUDA_VISIBLE_DEVICES='1' main.py \
 	--batch_size 1 \
 	--epochs 5 \
 	--seed 1234 \
+	--sche 'lambdacosine' \
+	--max_epoch 100 \
+	--lrf 0.1 \
 	--es \
 	--es_warmup 0 \
 	--es_patience 20 \
 	--log \
 	--print_every 20
 ```
+Note: `sche`, `max_epoch`, `lrf` are optional. 
 
 **If your training got interupted**
 ```bash
