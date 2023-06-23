@@ -211,7 +211,7 @@ class Trainer(baseTrainer):
                 # train_dice.extend(batch_dice)
 
                 train_loss, train_all_loss = self.__compute_loss(
-                    self.loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf
+                    self.loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf, mode = 'train'
                 )
 
                 train_loss.backward()
@@ -287,7 +287,7 @@ class Trainer(baseTrainer):
 
     def __eval(self, cur, val_loader: torch.utils.data.DataLoader) -> bool:
         val_loss_sum = 0
-        val_sub_loss_sum = {l: 0.0 for l in self.loss}
+        val_sub_loss_sum = {l: 0.0 for l in self.loss if l != 'Smooth'}
         val_num_foldings, val_log_jac_det_std, val_tre, val_dice = [], [], [], []
         self.model.eval()
         with torch.no_grad():
@@ -334,7 +334,7 @@ class Trainer(baseTrainer):
                 val_dice.extend(batch_dice)
 
                 val_loss, val_all_loss = self.__compute_loss(
-                    self.loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf
+                    self.loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf, mode = 'val'
                 )
                 val_loss_sum += val_loss.item()
                 for l, loss_value in val_sub_loss_sum.items():
@@ -395,7 +395,7 @@ class Trainer(baseTrainer):
         self.model.eval()
 
         val_loss_sum = 0
-        val_sub_loss_sum = {l: 0.0 for l in self.loss}
+        val_sub_loss_sum = {l: 0.0 for l in self.loss if l != 'Smooth'}
         val_num_foldings, val_log_jac_det_std, val_tre, val_dice = [], [], [], []
         with torch.no_grad():
             for batch_idx, (
@@ -441,7 +441,7 @@ class Trainer(baseTrainer):
                 val_dice.extend(batch_dice)
 
                 val_loss, val_all_loss = self.__compute_loss(
-                    self.loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf
+                    self.loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf, mode = 'val'
                 )
                 val_loss_sum += val_loss.item()
                 for l, loss_value in val_sub_loss_sum.items():
@@ -558,7 +558,7 @@ class Trainer(baseTrainer):
         return batch_num_foldings, batch_log_jac_det_std, batch_tre, batch_dice
 
     @staticmethod
-    def __compute_loss(loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf):
+    def __compute_loss(loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf, mode = 'train'):
         loss = 0.0
         all_loss = {}
         for l, lw in loss_fn.items():
@@ -567,9 +567,12 @@ class Trainer(baseTrainer):
                 loss += ncc_loss
                 all_loss["NCC"] = ncc_loss.item()
             elif l == "Smooth":
-                smooth_loss = lw[0](rf) * lw[1]
-                loss += smooth_loss
-                all_loss["Smooth"] = smooth_loss.item()
+                if mode == 'train':
+                    smooth_loss = lw[0](rf) * lw[1]
+                    loss += smooth_loss
+                    all_loss["Smooth"] = smooth_loss.item()
+                else:
+                    pass
             elif l == "Dice":
                 dice_loss = lw[0](fixed_mask, moving_mask_reg) * lw[1]
                 loss += dice_loss
