@@ -388,10 +388,10 @@ class Trainer(baseTrainer):
         if self.es:
             ckpt_path = self.es_ckpt_path
         else:
-            ckpt_path = self.es_ckpt_path
+            ckpt_path = self.ckpt_path
 
         print("=== Load model from {} ===".format(ckpt_path))
-        self.model.load_state_dict(torch.load(ckpt_path)["state_dict"])
+        self.model.load_state_dict(torch.load(ckpt_path)["model"])
         self.model.eval()
 
         val_loss_sum = 0
