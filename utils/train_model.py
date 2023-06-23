@@ -6,6 +6,7 @@ import pandas as pd
 import os
 import random
 import time
+import math
 from argparse import ArgumentParser
 from model.lkunet import LKUNet
 from model.transform import SpatialTransform, DiffeomorphicTransform
@@ -20,6 +21,12 @@ class baseTrainer:
         self.args = args
         self.opt = args.opt
         self.lr = args.lr
+        self.sche = args.sche
+        if self.sche:
+            self.sche_param = {
+                                "cosine": {"max_epoch": args.max_epoch},
+                                "lambdacosine": {"max_epoch": args.max_epoch, "lr_factor": args.lrf}
+                              }
         self.batch_size = args.batch_size
         self.seed = args.seed
         self.loss = args.loss
@@ -38,8 +45,10 @@ class baseTrainer:
         self.__init_model()
         self.__init_loss()
         self.__init_optimizer()
+        self.__init_scheduler()
         self.__init_logger()
         self.__init_es()
+        
 
     def __init_optimizer(self):
         print(f"Initiate {self.opt} optimizer", end=" ")
@@ -52,6 +61,22 @@ class baseTrainer:
             raise NotImplementedError
 
         print("...done")
+
+    def __init_scheduler(self):
+        if self.sche:
+            print(f"Initiate {self.sche} scheduler", end=" ")
+            if self.sche == "cosine":
+                sche_param = self.sche_param["cosine"]
+                self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=sche_param["max_epoch"], eta_min=0)
+            elif self.sche == "lambdacosine":
+                sche_param = self.sche_param["lambdacosine"]
+                lf = lambda x: ((1 + math.cos(x * math.pi / sche_param["max_epoch"])) / 2) * (1 - sche_param["lr_factor"]) + sche_param["lr_factor"]
+                self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lf)
+            else:
+                raise NotImplementedError
+            print("...done")
+        else:
+            self.scheduler = None
 
     def __init_loss(self):
         print(f"Initiate {self.loss} loss with weight {self.loss_weight}", end=" ")
@@ -205,6 +230,13 @@ class Trainer(baseTrainer):
                     )
                     for l in self.loss:
                         print("\t\t |- {} loss: {:.6f}".format(l, train_all_loss[l]))
+            
+            # update scheduler
+            if self.scheduler:
+                self.scheduler.step()
+                scheduler_state_dict = self.scheduler.state_dict()
+            else:
+                scheduler_state_dict = {}
 
             train_loss_mean = train_loss_sum / len(train_loader)
             train_sub_loss_mean = {
@@ -216,13 +248,14 @@ class Trainer(baseTrainer):
             # train_tre_mean = np.mean(train_tre)
             # train_dice_mean = np.mean(train_dice)
             # print("Epoch {} - Train Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}".format(i, train_loss_mean, train_jac_det_mean, train_tre_mean, train_dice_mean))
-            print("Epoch {} - Train Loss: {:.6f}".format(i, train_loss_mean))
+            print("Epoch {} - Train Loss: {:.6f} - LR: {:.4e}".format(i, train_loss_mean, self.optimizer.param_groups[0]['lr']))
             for l, tlm in train_sub_loss_mean.items():
                 print("\t\t |- {} loss: {:.6f}".format(l, tlm))
 
             # log training
             if self.writer:
                 self.writer.add_scalar("train/Total_loss", train_loss_mean, i)
+                self.writer.add_scalar("train/LR", self.optimizer.param_groups[0]['lr'], i) 
                 for l, tlm in train_sub_loss_mean.items():
                     self.writer.add_scalar("train/{}_loss".format(l), tlm, i)
 
@@ -234,6 +267,7 @@ class Trainer(baseTrainer):
                 "epoch": i + 1,
                 "model": self.model.state_dict(),
                 "optimizer": self.optimizer.state_dict(),
+                "scheduler": scheduler_state_dict,
                 "early_stopping": self.early_stopping,
                 #'logger': self.writer
             }
@@ -558,6 +592,7 @@ class Trainer(baseTrainer):
             self.start_epoch = ckpt["epoch"]
             self.model.load_state_dict(ckpt["model"])
             self.optimizer.load_state_dict(ckpt["optimizer"])
+            self.scheduler.load_state_dict(ckpt["scheduler"])
             # self.writer = ckpt['writer']
             self.early_stopping = ckpt["early_stopping"]
         else:
