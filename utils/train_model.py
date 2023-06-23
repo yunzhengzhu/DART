@@ -24,9 +24,9 @@ class baseTrainer:
         self.sche = args.sche
         if self.sche:
             self.sche_param = {
-                                "cosine": {"max_epoch": args.max_epoch},
-                                "lambdacosine": {"max_epoch": args.max_epoch, "lr_factor": args.lrf}
-                              }
+                "cosine": {"max_epoch": args.max_epoch},
+                "lambdacosine": {"max_epoch": args.max_epoch, "lr_factor": args.lrf},
+            }
         self.batch_size = args.batch_size
         self.seed = args.seed
         self.loss = args.loss
@@ -48,7 +48,6 @@ class baseTrainer:
         self.__init_scheduler()
         self.__init_logger()
         self.__init_es()
-        
 
     def __init_optimizer(self):
         print(f"Initiate {self.opt} optimizer", end=" ")
@@ -67,11 +66,21 @@ class baseTrainer:
             print(f"Initiate {self.sche} scheduler", end=" ")
             if self.sche == "cosine":
                 sche_param = self.sche_param["cosine"]
-                self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=sche_param["max_epoch"], eta_min=0)
+                self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                    self.optimizer, T_max=sche_param["max_epoch"], eta_min=0
+                )
             elif self.sche == "lambdacosine":
                 sche_param = self.sche_param["lambdacosine"]
-                lf = lambda x: ((1 + math.cos(x * math.pi / sche_param["max_epoch"])) / 2) * (1 - sche_param["lr_factor"]) + sche_param["lr_factor"]
-                self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lf)
+                lf = (
+                    lambda x: (
+                        (1 + math.cos(x * math.pi / sche_param["max_epoch"])) / 2
+                    )
+                    * (1 - sche_param["lr_factor"])
+                    + sche_param["lr_factor"]
+                )
+                self.scheduler = torch.optim.lr_scheduler.LambdaLR(
+                    self.optimizer, lr_lambda=lf
+                )
             else:
                 raise NotImplementedError
             print("...done")
@@ -80,7 +89,7 @@ class baseTrainer:
 
     def __init_loss(self):
         print(f"Initiate {self.loss} loss with weight {self.loss_weight}", end=" ")
-        #self.loss_weight = self.loss_weight / np.sum(self.loss_weight)
+        # self.loss_weight = self.loss_weight / np.sum(self.loss_weight)
         assert len(self.loss) == len(
             self.loss_weight
         ), "Loss and loss weight must have the same length"
@@ -211,7 +220,13 @@ class Trainer(baseTrainer):
                 # train_dice.extend(batch_dice)
 
                 train_loss, train_all_loss = self.__compute_loss(
-                    self.loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf, mode = 'train'
+                    self.loss_fn,
+                    fixed_img,
+                    moving_reg,
+                    fixed_mask,
+                    moving_mask_reg,
+                    rf,
+                    mode="train",
                 )
 
                 train_loss.backward()
@@ -230,7 +245,7 @@ class Trainer(baseTrainer):
                     )
                     for l in self.loss:
                         print("\t\t |- {} loss: {:.6f}".format(l, train_all_loss[l]))
-            
+
             # update scheduler
             if self.scheduler:
                 self.scheduler.step()
@@ -248,14 +263,20 @@ class Trainer(baseTrainer):
             # train_tre_mean = np.mean(train_tre)
             # train_dice_mean = np.mean(train_dice)
             # print("Epoch {} - Train Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}".format(i, train_loss_mean, train_jac_det_mean, train_tre_mean, train_dice_mean))
-            print("Epoch {} - Train Loss: {:.6f} - LR: {:.4e}".format(i, train_loss_mean, self.optimizer.param_groups[0]['lr']))
+            print(
+                "Epoch {} - Train Loss: {:.6f} - LR: {:.4e}".format(
+                    i, train_loss_mean, self.optimizer.param_groups[0]["lr"]
+                )
+            )
             for l, tlm in train_sub_loss_mean.items():
                 print("\t\t |- {} loss: {:.6f}".format(l, tlm))
 
             # log training
             if self.writer:
                 self.writer.add_scalar("train/Total_loss", train_loss_mean, i)
-                self.writer.add_scalar("train/LR", self.optimizer.param_groups[0]['lr'], i) 
+                self.writer.add_scalar(
+                    "train/LR", self.optimizer.param_groups[0]["lr"], i
+                )
                 for l, tlm in train_sub_loss_mean.items():
                     self.writer.add_scalar("train/{}_loss".format(l), tlm, i)
 
@@ -287,7 +308,7 @@ class Trainer(baseTrainer):
 
     def __eval(self, cur, val_loader: torch.utils.data.DataLoader) -> bool:
         val_loss_sum = 0
-        val_sub_loss_sum = {l: 0.0 for l in self.loss if l != 'Smooth'}
+        val_sub_loss_sum = {l: 0.0 for l in self.loss if l != "Smooth"}
         val_num_foldings, val_log_jac_det_std, val_tre, val_dice = [], [], [], []
         self.model.eval()
         with torch.no_grad():
@@ -334,7 +355,13 @@ class Trainer(baseTrainer):
                 val_dice.extend(batch_dice)
 
                 val_loss, val_all_loss = self.__compute_loss(
-                    self.loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf, mode = 'val'
+                    self.loss_fn,
+                    fixed_img,
+                    moving_reg,
+                    fixed_mask,
+                    moving_mask_reg,
+                    rf,
+                    mode="val",
                 )
                 val_loss_sum += val_loss.item()
                 for l, loss_value in val_sub_loss_sum.items():
@@ -395,7 +422,7 @@ class Trainer(baseTrainer):
         self.model.eval()
 
         val_loss_sum = 0
-        val_sub_loss_sum = {l: 0.0 for l in self.loss if l != 'Smooth'}
+        val_sub_loss_sum = {l: 0.0 for l in self.loss if l != "Smooth"}
         val_num_foldings, val_log_jac_det_std, val_tre, val_dice = [], [], [], []
         with torch.no_grad():
             for batch_idx, (
@@ -441,7 +468,13 @@ class Trainer(baseTrainer):
                 val_dice.extend(batch_dice)
 
                 val_loss, val_all_loss = self.__compute_loss(
-                    self.loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf, mode = 'val'
+                    self.loss_fn,
+                    fixed_img,
+                    moving_reg,
+                    fixed_mask,
+                    moving_mask_reg,
+                    rf,
+                    mode="val",
                 )
                 val_loss_sum += val_loss.item()
                 for l, loss_value in val_sub_loss_sum.items():
@@ -558,7 +591,9 @@ class Trainer(baseTrainer):
         return batch_num_foldings, batch_log_jac_det_std, batch_tre, batch_dice
 
     @staticmethod
-    def __compute_loss(loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf, mode = 'train'):
+    def __compute_loss(
+        loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf, mode="train"
+    ):
         loss = 0.0
         all_loss = {}
         for l, lw in loss_fn.items():
@@ -567,7 +602,7 @@ class Trainer(baseTrainer):
                 loss += ncc_loss
                 all_loss["NCC"] = ncc_loss.item()
             elif l == "Smooth":
-                if mode == 'train':
+                if mode == "train":
                     smooth_loss = lw[0](rf) * lw[1]
                     loss += smooth_loss
                     all_loss["Smooth"] = smooth_loss.item()
