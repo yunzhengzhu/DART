@@ -339,13 +339,13 @@ class Trainer(baseTrainer):
 
         # early stopping
         if self.es:
-            earlystop = self.early_stopping(
+            self.early_stopping(
                 epoch=cur,
                 val_loss=val_loss_mean,
                 model=self.model,
                 ckpt_path=self.es_ckpt_path,
             )
-            return earlystop
+            return self.early_stopping.early_stop
         else:
             return False
 
