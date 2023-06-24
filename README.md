@@ -22,6 +22,7 @@ CUDA_VISIBLE_DEVICES='1' main.py \
 	--sche 'lambdacosine' \
 	--max_epoch 100 \
 	--lrf 0.1 \
+	--rev_metric \
 	--es \
 	--es_warmup 0 \
 	--es_patience 20 \

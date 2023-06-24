@@ -41,9 +41,10 @@ class baseTrainer:
         self.print_every = args.print_every
         self.diff = args.diff
         self.pretrained = args.pretrained
+        self.rev_metric = args.rev_metric
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+        
         self.__init_model()
         self.__init_loss()
         self.__init_optimizer()
@@ -126,11 +127,12 @@ class baseTrainer:
 
         if self.pretrained:
             print("Load pretrained model", end=" ")
-            self.model.load_state_dict(torch.load(self.pretrained,map_location='cuda:0'))
+            self.model.load_state_dict(torch.load(self.pretrained, map_location='cuda:0'))
             print("...done")
 
         self.spatial_transform = SpatialTransform()
-        self.diff_transform = DiffeomorphicTransform()
+        if self.diff:
+            self.diff_transform = DiffeomorphicTransform()
 
         for param in self.spatial_transform.parameters():
             param.requires_grad = False
@@ -138,7 +140,8 @@ class baseTrainer:
 
         self.model.to(self.device)
         self.spatial_transform.to(self.device)
-        self.diff_transform.to(self.device)
+        if self.diff:
+            self.diff_transform.to(self.device)
 
     def __init_logger(self):
         if self.log:
@@ -322,6 +325,9 @@ class Trainer(baseTrainer):
         val_loss_sum = 0
         val_sub_loss_sum = {l: 0.0 for l in self.loss if l != "Smooth"}
         val_num_foldings, val_log_jac_det_std, val_tre, val_dice = [], [], [], []
+        if self.rev_metric:
+            rev_val_num_foldings, rev_val_log_jac_det_std, rev_val_tre, rev_val_dice = [], [], [], []
+        
         self.model.eval()
         with torch.no_grad():
             for batch_idx, (
@@ -368,6 +374,34 @@ class Trainer(baseTrainer):
                 val_log_jac_det_std.extend(batch_log_jac_det_std)
                 val_tre.extend(batch_tre)
                 val_dice.extend(batch_dice)
+                
+                if self.rev_metric:
+                    rrf = -rf
+                    if self.diff:
+                        D_rrf = self.diff_transform(rrf)
+                    else:
+                        D_rrf = rrf
+                    fixed_reg = self.spatial_transform(
+                        fixed_img, D_rrf.permute(0, 2, 3, 4, 1)
+                    )
+                    fixed_mask_reg = self.spatial_transform(
+                        fixed_mask, D_rrf.permute(0, 2, 3, 4, 1), mod="nearest"
+                    )
+                    
+                    # compute metrics from reverse direction
+                    (
+                        rev_batch_num_foldings,
+                        rev_batch_log_jac_det_std,
+                        rev_batch_tre,
+                        rev_batch_dice,
+                    ) = self.__compute_metrics(
+                        D_rrf, moving_kp, fixed_kp, moving_mask, fixed_mask, fixed_mask_reg
+                    )
+                    rev_val_num_foldings.extend(rev_batch_num_foldings)
+                    rev_val_log_jac_det_std.extend(rev_batch_log_jac_det_std)
+                    rev_val_tre.extend(rev_batch_tre)
+                    rev_val_dice.extend(rev_batch_dice)
+
 
                 val_loss, val_all_loss = self.__compute_loss(
                     self.loss_fn,
@@ -392,17 +426,32 @@ class Trainer(baseTrainer):
         val_log_jac_det_std_mean = np.mean(val_log_jac_det_std)
         val_tre_mean = np.mean(val_tre)
         val_dice_mean = np.mean(val_dice)
+        if self.rev_metric:
+            rev_val_num_foldings_mean = np.mean(rev_val_num_foldings)
+            rev_val_log_jac_det_std_mean = np.mean(rev_val_log_jac_det_std)
+            rev_val_tre_mean = np.mean(rev_val_tre)
+            rev_val_dice_mean = np.mean(rev_val_dice)
         print("Epoch {} - Validation Loss : {:.6f}".format(cur, val_loss_mean))
         for l, vslm in val_sub_loss_mean.items():
             print("\t\t |- {} loss: {:.6f}".format(l, vslm))
         print(
-            "\t\tDice: {:.6f}; TRE: {:.6f}; NumFold: {:.6f}; LogJacDetStd: {:6f}".format(
+            "\t\t(fwd) Dice: {:.6f}; TRE: {:.6f}; NumFold: {:.6f}; LogJacDetStd: {:6f}".format(
                 val_dice_mean,
                 val_tre_mean,
                 val_num_foldings_mean,
                 val_log_jac_det_std_mean,
             )
         )
+        if self.rev_metric:
+            print(
+                "\t\t(rev) Dice: {:.6f}; TRE: {:.6f}; NumFold: {:.6f}; LogJacDetStd: {:6f}".format(
+                    rev_val_dice_mean,
+                    rev_val_tre_mean,
+                    rev_val_num_foldings_mean,
+                    rev_val_log_jac_det_std_mean,
+                )
+            )
+            
 
         if self.writer:
             self.writer.add_scalar("val/Total_loss", val_loss_mean, cur)
@@ -412,6 +461,12 @@ class Trainer(baseTrainer):
             self.writer.add_scalar("val/TRE", val_tre_mean, cur)
             self.writer.add_scalar("val/num_foldings", val_num_foldings_mean, cur)
             self.writer.add_scalar("val/log_jac_det_std", val_log_jac_det_std_mean, cur)
+            if self.rev_metric:
+                self.writer.add_scalar("val/Dice_rev", rev_val_dice_mean, cur)
+                self.writer.add_scalar("val/TRE_rev", rev_val_tre_mean, cur)
+                self.writer.add_scalar("val/num_foldings_rev", rev_val_num_foldings_mean, cur)
+                self.writer.add_scalar("val/log_jac_det_std_rev", rev_val_log_jac_det_std_mean, cur)
+
 
         # early stopping
         if self.es:
@@ -439,6 +494,8 @@ class Trainer(baseTrainer):
         val_loss_sum = 0
         val_sub_loss_sum = {l: 0.0 for l in self.loss if l != "Smooth"}
         val_num_foldings, val_log_jac_det_std, val_tre, val_dice = [], [], [], []
+        if self.rev_metric: 
+            rev_val_num_foldings, rev_val_log_jac_det_std, rev_val_tre, rev_val_dice = [], [], [], []
         with torch.no_grad():
             for batch_idx, (
                 fixed_img,
@@ -485,6 +542,33 @@ class Trainer(baseTrainer):
                 val_log_jac_det_std.extend(batch_log_jac_det_std)
                 val_tre.extend(batch_tre)
                 val_dice.extend(batch_dice)
+                
+                if self.rev_metric:
+                    rrf = -rf
+                    if self.diff:
+                        D_rrf = self.diff_transform(rrf)
+                    else:
+                        D_rrf = rrf
+                    fixed_reg = self.spatial_transform(
+                        fixed_img, D_rrf.permute(0, 2, 3, 4, 1)
+                    )
+                    fixed_mask_reg = self.spatial_transform(
+                        fixed_mask, D_rrf.permute(0, 2, 3, 4, 1), mod="nearest"
+                    )
+                    
+                    # compute metrics from reverse direction
+                    (
+                        rev_batch_num_foldings,
+                        rev_batch_log_jac_det_std,
+                        rev_batch_tre,
+                        rev_batch_dice,
+                    ) = self.__compute_metrics(
+                        D_rrf, moving_kp, fixed_kp, moving_mask, fixed_mask, fixed_mask_reg
+                    )
+                    rev_val_num_foldings.extend(rev_batch_num_foldings)
+                    rev_val_log_jac_det_std.extend(rev_batch_log_jac_det_std)
+                    rev_val_tre.extend(rev_batch_tre)
+                    rev_val_dice.extend(rev_batch_dice)
 
                 val_loss, val_all_loss = self.__compute_loss(
                     self.loss_fn,
@@ -531,18 +615,32 @@ class Trainer(baseTrainer):
         val_log_jac_det_std_mean = np.mean(val_log_jac_det_std)
         val_tre_mean = np.mean(val_tre)
         val_dice_mean = np.mean(val_dice)
+        if self.rev_metric:
+            rev_val_num_foldings_mean = np.mean(rev_val_num_foldings)
+            rev_val_log_jac_det_std_mean = np.mean(rev_val_log_jac_det_std)
+            rev_val_tre_mean = np.mean(rev_val_tre)
+            rev_val_dice_mean = np.mean(rev_val_dice)
 
         print("Final validation Loss : {:.6f}".format(val_loss_mean))
         for l, vslm in val_sub_loss_mean.items():
             print("\t\t |- {} loss : {:.6f}".format(l, vslm))
         print(
-            "\t\tDice: {:.6f}; TRE: {:.6f}; NumFold: {:.6f}; LogJacDetStd: {:6f}".format(
+            "\t\t(fwd) Dice: {:.6f}; TRE: {:.6f}; NumFold: {:.6f}; LogJacDetStd: {:6f}".format(
                 val_dice_mean,
                 val_tre_mean,
                 val_num_foldings_mean,
                 val_log_jac_det_std_mean,
             )
         )
+        if self.rev_metric:
+            print(
+                "\t\t(rev) Dice: {:.6f}; TRE: {:.6f}; NumFold: {:.6f}; LogJacDetStd: {:6f}".format(
+                    rev_val_dice_mean,
+                    rev_val_tre_mean,
+                    rev_val_num_foldings_mean,
+                    rev_val_log_jac_det_std_mean,
+                )
+            )
 
         # save results
         results = pd.DataFrame(
@@ -557,6 +655,19 @@ class Trainer(baseTrainer):
             },
             index=["loss", "dice", "tre", "num_fold", "log_jac_det_std"],
         )
+        if self.rev_metric:
+            rev_results = pd.DataFrame(
+                {
+                    "val": [
+                        rev_val_dice_mean,
+                        rev_val_tre_mean,
+                        rev_val_num_foldings_mean,
+                        rev_val_log_jac_det_std_mean,
+                    ],
+                },
+                index=["rev_dice", "rev_tre", "rev_num_fold", "rev_log_jac_det_std"],
+            )
+            results = pd.concat([results, rev_results], axis=0)
         results_sub_loss = pd.DataFrame(val_sub_loss_mean, index=["val"]).T
         results = pd.concat([results, results_sub_loss], axis=0)
 

@@ -87,6 +87,11 @@ def argParser():
         help="save displacement field",
     )
 
+    # validation
+    parser.add_argument(
+        "--rev_metric", action="store_true", default=False, help="track reverse metrics"
+    )
+
     # continue training if your model is interrupted
     parser.add_argument(
         "--continue_training",
