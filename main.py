@@ -125,7 +125,7 @@ def main(args):
                 setattr(args, key, value)
 
         # init model
-        model = Trainer(args)
+        model = Trainer(args, mode="train")
         # load checkpoint
         model.load_prev()
 
@@ -150,7 +150,7 @@ def main(args):
             json.dump(vars(args), f, indent=4)
 
         # init model
-        model = Trainer(args)
+        model = Trainer(args, mode="train")
     # init dataset
     train_dataset = NLSTDataset(
         data_dir=args.data_dir, json_file=args.json_file, mode="train"

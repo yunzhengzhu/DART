@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 import math
+from scipy.ndimage import map_coordinates
 
 """
 Adopted from https://github.com/xi-jia/LKU-Net/blob/main/train.py
@@ -148,3 +149,24 @@ class SAD:
 
     def __call__(self, y_true, y_pred):
         return torch.mean(torch.abs(y_true - y_pred))
+
+class TRE:
+    """
+    Target registration error for keypoints
+    """
+    ## numpy version
+    def __call__(self, fix_lms, mov_lms, disp, spacing_fix, spacing_mov):
+        tre = []
+        for subject_id in range(len(disp)):
+            fix_lms_disp_x = map_coordinates(disp[subject_id][:, :, :, 0], fix_lms[subject_id].transpose())
+            fix_lms_disp_y = map_coordinates(disp[subject_id][:, :, :, 1], fix_lms[subject_id].transpose())
+            fix_lms_disp_z = map_coordinates(disp[subject_id][:, :, :, 2], fix_lms[subject_id].transpose())
+            fix_lms_disp = np.array(
+                (fix_lms_disp_x, fix_lms_disp_y, fix_lms_disp_z)
+            ).transpose()
+
+            fix_lms_warped = fix_lms[subject_id] + fix_lms_disp
+            tre.append(np.linalg.norm((fix_lms_warped - mov_lms[subject_id]) * spacing_mov, axis=2).mean(1))
+        return np.mean(np.array(tre))
+    
+        

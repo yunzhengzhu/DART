@@ -41,7 +41,7 @@ def main(args):
         os.makedirs(args.save_dir)
 
     # init model
-    model = Trainer(args)
+    model = Trainer(args, mode="eval")
 
     # init dataset
     val_dataset = NLSTDataset(

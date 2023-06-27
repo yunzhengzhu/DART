@@ -10,14 +10,14 @@ import math
 from argparse import ArgumentParser
 from model.lkunet import LKUNet
 from model.transform import SpatialTransform, DiffeomorphicTransform
-from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD
+from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE
 from utils.train_utils import EarlyStopping
 from utils.metric_utils import jacobian_determinant, compute_tre, compute_dice
 from tensorboardX import SummaryWriter
 
 
 class baseTrainer:
-    def __init__(self, args: ArgumentParser) -> None:
+    def __init__(self, args: ArgumentParser, mode: str = "train") -> None:
         self.args = args
         self.opt = args.opt
         self.lr = args.lr
@@ -40,7 +40,7 @@ class baseTrainer:
         self.log = args.log
         self.print_every = args.print_every
         self.diff = args.diff
-        self.pretrained = args.pretrained
+        self.pretrained = args.pretrained if mode == "train" else None
         self.rev_metric = args.rev_metric
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -110,6 +110,8 @@ class baseTrainer:
                 self.loss_fn[l] = [MSE(), lw]
             elif l == "SAD":
                 self.loss_fn[l] = [SAD(), lw]
+            elif l == "TRE":
+                self.loss_fn[l] = [TRE(), lw]
             else:
                 raise NotImplementedError
         print("...done")
@@ -170,14 +172,14 @@ class baseTrainer:
 
 
 class Trainer(baseTrainer):
-    def __init__(self, args) -> None:
-        super(Trainer, self).__init__(args)
+    def __init__(self, args, mode: str = "train") -> None:
+        super(Trainer, self).__init__(args, mode=mode)
         self.start_epoch = 0
         self.epochs = args.epochs
         self.ckpt_path = os.path.join(args.exp_dir, "checkpoint.pth.tar")
         self.es_ckpt_path = os.path.join(args.exp_dir, "es_checkpoint.pth.tar")
         self.save_df = args.save_df
-
+    
     def train(
         self,
         train_loader: torch.utils.data.DataLoader,
@@ -222,14 +224,14 @@ class Trainer(baseTrainer):
                 )
 
                 # compute metrics
-                # (
-                #    batch_jac_det,
-                #    batch_jac_det_std,
-                #    batch_tre,
-                #    batch_dice,
-                # ) = self.__compute_metrics(
-                #    D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
-                # )
+                (
+                   batch_num_fold,
+                   batch_log_jac_det_std,
+                   batch_tre,
+                   batch_dice,
+                ) = self.__compute_metrics(
+                   D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
+                )
                 # train_jac_det.extend(batch_jac_det)
                 # train_tre.extend(batch_tre)
                 # train_dice.extend(batch_dice)
@@ -240,6 +242,8 @@ class Trainer(baseTrainer):
                     moving_reg,
                     fixed_mask,
                     moving_mask_reg,
+                    fixed_kp,
+                    moving_kp,
                     rf,
                     mode="train",
                 )
@@ -360,7 +364,7 @@ class Trainer(baseTrainer):
                 moving_mask_reg = self.spatial_transform(
                     moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                 )
-
+                
                 # compute metrics
                 (
                     batch_num_foldings,
@@ -409,9 +413,12 @@ class Trainer(baseTrainer):
                     moving_reg,
                     fixed_mask,
                     moving_mask_reg,
+                    fixed_kp,
+                    moving_kp,
                     rf,
                     mode="val",
                 )
+                
                 val_loss_sum += val_loss.item()
                 for l, loss_value in val_sub_loss_sum.items():
                     val_sub_loss_sum[l] = loss_value + val_all_loss[l]
@@ -576,6 +583,8 @@ class Trainer(baseTrainer):
                     moving_reg,
                     fixed_mask,
                     moving_mask_reg,
+                    fixed_kp,
+                    moving_kp,
                     rf,
                     mode="val",
                 )
@@ -694,7 +703,7 @@ class Trainer(baseTrainer):
             tre = compute_tre(
                 fix_lms=fixed_kp[subject_idx].clone().detach().cpu().numpy(),
                 mov_lms=moving_kp[subject_idx].clone().detach().cpu().numpy(),
-                disp= D_rf.permute(0, 2, 3, 4, 1)[subject_idx] 
+                disp=D_rf.permute(0, 2, 3, 4, 1)[subject_idx] 
                 .clone()
                 .detach()
                 .cpu()
@@ -702,7 +711,20 @@ class Trainer(baseTrainer):
                 spacing_fix=1.5,
                 spacing_mov=1.5,
             )  # spacing is 1.5 for NLST
-
+            
+            fwd_tre = compute_tre(
+                fix_lms=moving_kp[subject_idx].clone().detach().cpu().numpy(),
+                mov_lms=fixed_kp[subject_idx].clone().detach().cpu().numpy(),
+                disp=D_rf.permute(0, 2, 3, 4, 1)[subject_idx] 
+                .clone()
+                .detach()
+                .cpu()
+                .numpy(),
+                spacing_fix=1.5,
+                spacing_mov=1.5,
+            )  # spacing is 1.5 for NLST
+            #print('TRE(fwd): {}'.format(fwd_tre))
+            #print('TRE(rev): {}'.format(tre))
 
             # Dice masks
             mean_dice, dice = compute_dice(
@@ -723,7 +745,7 @@ class Trainer(baseTrainer):
 
     @staticmethod
     def __compute_loss(
-        loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, rf, mode="train"
+        loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, fixed_kp, moving_kp, rf, mode="train"
     ):
         loss = 0.0
         all_loss = {}
@@ -755,6 +777,20 @@ class Trainer(baseTrainer):
                 sad_loss = lw[0](fixed_img, moving_reg) * lw[1]
                 loss += sad_loss
                 all_loss["SAD"] = sad_loss.item()
+            elif l == "TRE":
+                tre_loss = lw[0](
+                    fix_lms=fixed_kp.clone().detach().cpu().numpy(),
+                    mov_lms=moving_kp.clone().detach().cpu().numpy(),
+                    disp=rf.permute(0, 2, 3, 4, 1) 
+                    .clone()
+                    .detach()
+                    .cpu()
+                    .numpy(),
+                    spacing_fix=1.5,
+                    spacing_mov=1.5,
+                ) * lw[1]
+                loss += tre_loss
+                all_loss["TRE"] = tre_loss.item()
 
         return loss, all_loss
 
