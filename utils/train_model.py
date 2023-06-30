@@ -779,13 +779,9 @@ class Trainer(baseTrainer):
                 all_loss["SAD"] = sad_loss.item()
             elif l == "TRE":
                 tre_loss = lw[0](
-                    fix_lms=fixed_kp.clone().detach().cpu().numpy(),
-                    mov_lms=moving_kp.clone().detach().cpu().numpy(),
-                    disp=rf.permute(0, 2, 3, 4, 1) 
-                    .clone()
-                    .detach()
-                    .cpu()
-                    .numpy(),
+                    fix_lms=fixed_kp,
+                    mov_lms=moving_kp,
+                    disp=rf.permute(0, 2, 3, 4, 1),
                     spacing_fix=1.5,
                     spacing_mov=1.5,
                 ) * lw[1]

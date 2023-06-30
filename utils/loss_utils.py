@@ -155,18 +155,46 @@ class TRE:
     Target registration error for keypoints
     """
     ## numpy version
-    def __call__(self, fix_lms, mov_lms, disp, spacing_fix, spacing_mov):
-        tre = []
-        for subject_id in range(len(disp)):
-            fix_lms_disp_x = map_coordinates(disp[subject_id][:, :, :, 0], fix_lms[subject_id].transpose())
-            fix_lms_disp_y = map_coordinates(disp[subject_id][:, :, :, 1], fix_lms[subject_id].transpose())
-            fix_lms_disp_z = map_coordinates(disp[subject_id][:, :, :, 2], fix_lms[subject_id].transpose())
-            fix_lms_disp = np.array(
-                (fix_lms_disp_x, fix_lms_disp_y, fix_lms_disp_z)
-            ).transpose()
+    #def __call__(self, mov_lms, fix_lms, disp, spacing_fix, spacing_mov):
+    #    fix_lms = fix_lms.clone().detach().cpu().numpy()
+    #    mov_lms = mov_lms.clone().detach().cpu().numpy()
+    #    disp = disp.clone().detach().cpu().numpy()
+    #
+    #    tre = []
+    #    for subject_id in range(len(disp)):
+    #        fix_lms_disp_x = map_coordinates(disp[subject_id][:, :, :, 0], fix_lms[subject_id].transpose())
+    #        fix_lms_disp_y = map_coordinates(disp[subject_id][:, :, :, 1], fix_lms[subject_id].transpose())
+    #        fix_lms_disp_z = map_coordinates(disp[subject_id][:, :, :, 2], fix_lms[subject_id].transpose())
+    #        fix_lms_disp = np.array(
+    #            (fix_lms_disp_x, fix_lms_disp_y, fix_lms_disp_z)
+    #        ).transpose()
+    #
+    #        fix_lms_warped = fix_lms[subject_id] + fix_lms_disp
+    #        tre.append(np.linalg.norm((fix_lms_warped - mov_lms[subject_id]) * spacing_mov, axis=2).mean(1))
+    #    import pdb
+    #    pdb.set_trace()
+    #    return np.mean(np.array(tre))
 
-            fix_lms_warped = fix_lms[subject_id] + fix_lms_disp
-            tre.append(np.linalg.norm((fix_lms_warped - mov_lms[subject_id]) * spacing_mov, axis=2).mean(1))
-        return np.mean(np.array(tre))
+    def __init__(self, mode='round'):
+        self.mode = mode
+
     
-        
+    def __call__(self, fix_lms, mov_lms, disp, spacing_fix, spacing_mov):
+        '''
+        fix_lms: torch.tensor(1, 1, row, 3)
+        mov_lms: torch.tensor(1, 1, row, 3)
+        disp: torch.tensor(1, h, w, d, 3)
+        '''
+        if self.mode == 'round':
+            mov_lms = torch.round(mov_lms)
+        elif self.mode == 'bilinear':
+            raise NotImplementedError
+
+        mov_lms = mov_lms.to(torch.long).squeeze() # row, 3
+        fix_lms = fix_lms.squeeze() # row, 3
+        disp = disp.squeeze() # h, w, d, 3
+        mov_disp = disp[[mov_lms[:, 0], mov_lms[:, 1], mov_lms[:, 2]]] # row, 3
+        mov_lms_warped = mov_lms.to(float) + mov_disp.to(float)
+        return torch.mean((fix_lms - mov_lms_warped) ** 2)
+                                                                                           
+   

@@ -132,9 +132,9 @@ def main(args):
     else:
         # create experiment folder
         if args.sche:
-            exp_name = f"{args.model_type}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_sche{args.sche}_lrf{args.lrf}_bs{args.batch_size}_seed{args.seed}"
+            exp_name = f"{args.model_type}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_sche{args.sche}_lrf{args.lrf}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}"
         else:
-            exp_name = f"{args.model_type}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_seed{args.seed}"
+            exp_name = f"{args.model_type}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}"
         
         if args.diff:
             exp_name += "_difftrans"
