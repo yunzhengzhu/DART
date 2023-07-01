@@ -239,6 +239,8 @@ class LKUNet(nn.Module):
         self.up3 = self.decoder(self.start_channel * 2, self.start_channel * 2)
         self.up4 = self.decoder(self.start_channel * 2, self.start_channel * 2)
 
+        initialize_weights(self)
+
     def encoder(
         self,
         in_channels,
