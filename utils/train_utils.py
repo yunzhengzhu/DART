@@ -7,14 +7,15 @@ import random
 import os
 
 def initialize_weights(module):
-	for m in module.modules():
-		if isinstance(m, nn.BatchNorm3d):
-			nn.init.constant_(m.weight, 1)
-			nn.init.constant_(m.bias, 0)
+    for m in module.modules():
+        if isinstance(m, nn.BatchNorm3d):
+            nn.init.constant_(m.weight, 1)
+            nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.Conv3d):
+            nn.init.xavier_uniform_(m.weight)
+            if m.bias is not None:
+                m.bias.data.zero_()
 
-		elif isinstance(m, nn.Conv3d):
-			nn.init.xavier_uniform(m.weight)
-			m.bias.data.zero_()
 
 def set_seed(seed: int) -> None:
     np.random.seed(seed)

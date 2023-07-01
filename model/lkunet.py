@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 import numpy as np
-
+from utils.train_utils import initialize_weights
 
 # This code is adapted from https://github.com/xi-jia/LKU-Net/blob/main/Models.py
 class LK_encoder(nn.Module):
