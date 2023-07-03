@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 import numpy as np
-
+from utils.train_utils import initialize_weights
 
 # This code is adapted from https://github.com/xi-jia/LKU-Net/blob/main/Models.py
 class LK_encoder(nn.Module):
@@ -280,6 +280,8 @@ class LKUNet(nn.Module):
         self.up2 = self.decoder(self.start_channel * 4, self.start_channel * 4)
         self.up3 = self.decoder(self.start_channel * 2, self.start_channel * 2)
         self.up4 = self.decoder(self.start_channel * 2, self.start_channel * 2)
+
+        initialize_weights(self)
 
     def encoder(
         self,
