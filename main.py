@@ -25,6 +25,9 @@ def argParser():
     parser.add_argument(
         "--result_dir", type=str, default="./results", help="path to output directory"
     )
+    parser.add_argument(
+        "--downsample", type=int, default=1, help="downsample factor on all dims"
+    )
     # model
     parser.add_argument("--model_type", type=str, default="LKU-Net", help="model name")
     parser.add_argument(
@@ -153,10 +156,10 @@ def main(args):
         model = Trainer(args, mode="train")
     # init dataset
     train_dataset = NLSTDataset(
-        data_dir=args.data_dir, json_file=args.json_file, mode="train"
+        data_dir=args.data_dir, json_file=args.json_file, mode="train", downsample=args.downsample
     )
     val_dataset = NLSTDataset(
-        data_dir=args.data_dir, json_file=args.json_file, mode="val"
+        data_dir=args.data_dir, json_file=args.json_file, mode="val", downsample=args.downsample
     )
 
     # init dataloader

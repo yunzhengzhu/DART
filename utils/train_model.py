@@ -120,7 +120,12 @@ class baseTrainer:
         print(f"Initiate {self.model_type} model", end=" ")
         if self.model_type == "LKU-Net":
             self.model = LKUNet(
-                in_channel=2, n_classes=3, start_channel=self.start_channel
+                in_channel=2, n_classes=3, start_channel=self.start_channel, layer_type='lku'
+            )
+            print(self.model)
+        elif self.model_type == "Voxelmorph":
+            self.model = LKUNet(
+                in_channel=2, n_classes=3, start_channel=self.start_channel, layer_type='vxm'
             )
             print(self.model)
         else:
@@ -211,7 +216,8 @@ class Trainer(baseTrainer):
                     self.device
                 ), moving_mask.float().to(self.device)
 
-                rf = self.model(moving_img, fixed_img)
+                #rf = self.model(moving_img, fixed_img)
+                rf = self.model(fixed_img, moving_img)
                 if self.diff:
                     D_rf = self.diff_transform(rf)
                 else:
@@ -224,14 +230,14 @@ class Trainer(baseTrainer):
                 )
 
                 # compute metrics
-                (
-                   batch_num_fold,
-                   batch_log_jac_det_std,
-                   batch_tre,
-                   batch_dice,
-                ) = self.__compute_metrics(
-                   D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
-                )
+                #(
+                #   batch_num_fold,
+                #   batch_log_jac_det_std,
+                #   batch_tre,
+                #   batch_dice,
+                #) = self.__compute_metrics(
+                #   D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
+                #)
                 # train_jac_det.extend(batch_jac_det)
                 # train_tre.extend(batch_tre)
                 # train_dice.extend(batch_dice)
@@ -353,7 +359,8 @@ class Trainer(baseTrainer):
                 ), moving_mask.float().to(self.device)
 
                 # pass data to model
-                rf = self.model(moving_img, fixed_img)
+                #rf = self.model(moving_img, fixed_img)
+                rf = self.model(fixed_img, moving_img)
                 if self.diff:
                     D_rf = self.diff_transform(rf)
                 else:
@@ -523,7 +530,8 @@ class Trainer(baseTrainer):
                 ), moving_mask.float().to(self.device)
 
                 # pass data to model
-                rf = self.model(moving_img, fixed_img)
+                #rf = self.model(moving_img, fixed_img)
+                rf = self.model(fixed_img, moving_img)
                 if self.diff:
                     D_rf = self.diff_transform(rf)
                 else:
@@ -712,17 +720,17 @@ class Trainer(baseTrainer):
                 spacing_mov=1.5,
             )  # spacing is 1.5 for NLST
             
-            fwd_tre = compute_tre(
-                fix_lms=moving_kp[subject_idx].clone().detach().cpu().numpy(),
-                mov_lms=fixed_kp[subject_idx].clone().detach().cpu().numpy(),
-                disp=D_rf.permute(0, 2, 3, 4, 1)[subject_idx] 
-                .clone()
-                .detach()
-                .cpu()
-                .numpy(),
-                spacing_fix=1.5,
-                spacing_mov=1.5,
-            )  # spacing is 1.5 for NLST
+            #tre = compute_tre(
+            #    fix_lms=moving_kp[subject_idx].clone().detach().cpu().numpy(),
+            #    mov_lms=fixed_kp[subject_idx].clone().detach().cpu().numpy(),
+            #    disp=D_rf.permute(0, 2, 3, 4, 1)[subject_idx] 
+            #    .clone()
+            #    .detach()
+            #    .cpu()
+            #    .numpy(),
+            #    spacing_fix=1.5,
+            #    spacing_mov=1.5,
+            #)  # spacing is 1.5 for NLST
             #print('TRE(fwd): {}'.format(fwd_tre))
             #print('TRE(rev): {}'.format(tre))
 
@@ -781,7 +789,7 @@ class Trainer(baseTrainer):
                 tre_loss = lw[0](
                     fix_lms=fixed_kp,
                     mov_lms=moving_kp,
-                    disp=rf.permute(0, 2, 3, 4, 1),
+                    disp=rf,
                     spacing_fix=1.5,
                     spacing_mov=1.5,
                 ) * lw[1]

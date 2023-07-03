@@ -107,11 +107,12 @@ class LK_encoder(nn.Module):
 
 
 class LKUNet(nn.Module):
-    def __init__(self, in_channel, n_classes, start_channel):
+    def __init__(self, in_channel, n_classes, start_channel, layer_type='lku'):
         self.in_channel = in_channel
         self.n_classes = n_classes
         self.start_channel = start_channel
         bias_opt = True
+        self.layer_type = layer_type
 
         super(LKUNet, self).__init__()
         self.eninput = self.encoder(self.in_channel, self.start_channel, bias=bias_opt)
@@ -119,47 +120,88 @@ class LKUNet(nn.Module):
         self.ec2 = self.encoder(
             self.start_channel, self.start_channel * 2, stride=2, bias=bias_opt
         )
-        self.ec3 = LK_encoder(
-            self.start_channel * 2,
-            self.start_channel * 2,
-            kernel_size=5,
-            stride=1,
-            padding=2,
-            bias=bias_opt,
-        )
+        if self.layer_type == 'lku':
+            self.ec3 = LK_encoder(
+                self.start_channel * 2,
+                self.start_channel * 2,
+                kernel_size=5,
+                stride=1,
+                padding=2,
+                bias=bias_opt,
+            )
+        elif self.layer_type == 'vxm':
+            self.ec3 = self.encoder(
+                self.start_channel * 2,
+                self.start_channel * 2,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=bias_opt,
+            )
+    
         self.ec4 = self.encoder(
             self.start_channel * 2, self.start_channel * 4, stride=2, bias=bias_opt
         )
-        self.ec5 = LK_encoder(
-            self.start_channel * 4,
-            self.start_channel * 4,
-            kernel_size=5,
-            stride=1,
-            padding=2,
-            bias=bias_opt,
-        )
+        if self.layer_type == 'lku':
+            self.ec5 = LK_encoder(
+                self.start_channel * 4,
+                self.start_channel * 4,
+                kernel_size=5,
+                stride=1,
+                padding=2,
+                bias=bias_opt,
+            )
+        elif self.layer_type == 'vxm':
+            self.ec5 = self.encoder(
+                self.start_channel * 4,
+                self.start_channel * 4,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=bias_opt,
+            )
+            
         self.ec6 = self.encoder(
             self.start_channel * 4, self.start_channel * 8, stride=2, bias=bias_opt
         )
-        self.ec7 = LK_encoder(
-            self.start_channel * 8,
-            self.start_channel * 8,
-            kernel_size=5,
-            stride=1,
-            padding=2,
-            bias=bias_opt,
-        )
+        if self.layer_type == 'lku':
+            self.ec7 = LK_encoder(
+                self.start_channel * 8,
+                self.start_channel * 8,
+                kernel_size=5,
+                stride=1,
+                padding=2,
+                bias=bias_opt,
+            )
+        elif self.layer_type == 'vxm':
+            self.ec7 = self.encoder(
+                self.start_channel * 8,
+                self.start_channel * 8,
+                stride=1,
+                padding=1,
+                bias=bias_opt,
+            )
         self.ec8 = self.encoder(
             self.start_channel * 8, self.start_channel * 8, stride=2, bias=bias_opt
         )
-        self.ec9 = LK_encoder(
-            self.start_channel * 8,
-            self.start_channel * 8,
-            kernel_size=5,
-            stride=1,
-            padding=2,
-            bias=bias_opt,
-        )
+        if self.layer_type == 'lku':
+            self.ec9 = LK_encoder(
+                self.start_channel * 8,
+                self.start_channel * 8,
+                kernel_size=5,
+                stride=1,
+                padding=2,
+                bias=bias_opt,
+            )
+        elif self.layer_type == 'vxm':
+            self.ec9 = self.encoder(
+                self.start_channel * 8,
+                self.start_channel * 8,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=bias_opt,
+            )
 
         self.dc1 = self.encoder(
             self.start_channel * 8 + self.start_channel * 8,
@@ -343,16 +385,22 @@ class LKUNet(nn.Module):
         e0 = self.ec1(e0)
 
         e1 = self.ec2(e0)
-        e1 = self.ec3(e1)
+        if self.layer_type != None:
+            e1 = self.ec3(e1)
 
         e2 = self.ec4(e1)
-        e2 = self.ec5(e2)
+        
+        if self.layer_type != None:
+            e2 = self.ec5(e2)
 
         e3 = self.ec6(e2)
-        e3 = self.ec7(e3)
+        if self.layer_type != None:
+            e3 = self.ec7(e3)
 
         e4 = self.ec8(e3)
-        e4 = self.ec9(e4)
+        
+        if self.layer_type != None:
+            e4 = self.ec9(e4)
 
         d0 = torch.cat((self.up1(e4), e3), 1)
 
@@ -377,3 +425,5 @@ class LKUNet(nn.Module):
         # f_yx = self.dc10(d3)
 
         return f_xy  # , f_yx
+
+
