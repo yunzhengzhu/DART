@@ -25,6 +25,8 @@ class NLSTDataset(Dataset):
         # get subjects based on mode
         if mode == "train":
             subjects = jdict["training_paired_images"]
+            # remove duplicate cases from val
+            subjects = [subject for subject in subjects if subject not in jdict["registration_val"]]
         elif mode == "val":
             subjects = jdict["registration_val"]
         elif mode == "test":
