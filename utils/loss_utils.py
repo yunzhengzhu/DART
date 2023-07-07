@@ -185,10 +185,15 @@ class TRE:
     #    pred_lmsdiff = F.grid_sample(disp, (mov_lms / torch.tensor(disp.shape[2:]).cuda() * 2 - 1).view(1, -1, 1, 1, 3), mode='bilinear').squeeze().t()
     #    return torch.mean((gt_lmdiff - pred_lmsdiff) ** 2)
     
-    def __call__(self, fix_lms, mov_lms, disp, spacing_fix, spacing_mov):
+    def __call__(self, fix_lms, mov_lms, disp, spacing_fix, spacing_mov, normalize=True):
         mov_lms = mov_lms.squeeze() # row, 3
         fix_lms = fix_lms.squeeze() # row, 3
+        
+        if normalize:
+            mov_lms = mov_lms / torch.tensor(disp.shape[2:]).cuda() * 2 - 1
+            fix_lms = fix_lms / torch.tensor(disp.shape[2:]).cuda() * 2 - 1
+
         gt_lmdiff = mov_lms - fix_lms
 
-        pred_lmsdiff = F.grid_sample(disp, (fix_lms / torch.tensor(disp.shape[2:]).cuda() * 2 - 1).view(1, -1, 1, 1, 3), mode='bilinear').squeeze().t()
+        pred_lmsdiff = F.grid_sample(disp, fix_lms.view(1, -1, 1, 1, 3), mode='bilinear').squeeze().t()
         return torch.mean((gt_lmdiff - pred_lmsdiff) ** 2)

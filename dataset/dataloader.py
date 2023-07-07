@@ -54,14 +54,14 @@ class NLSTDataset(Dataset):
                 fixed_img_path.replace("images", "keypoints").replace("nii.gz", "csv"),
                 delimiter=",",
             ), axis=-1
-        )[None, ...] / self.downsample
+        ).copy()[None, ...] #/ self.downsample
         
         moving_kp = np.flip(
             np.genfromtxt(
                 moving_img_path.replace("images", "keypoints").replace("nii.gz", "csv"),
                 delimiter=",",
             ), axis=-1
-        )[None, ...] / self.downsample
+        ).copy()[None, ...] #/ self.downsample
         
         # load masks
         fixed_mask = self.__load_nii_img(

@@ -34,6 +34,8 @@ def argParser():
         "--start_channel", type=int, default=8, help="start channel U-Net"
     )
     parser.add_argument(
+        "--blur_factor", type=int, default=None, help="disp blurring")
+    parser.add_argument(
         "--diff", action="store_true", default=False, help="use DiffeomorphicTransform"
     )
     parser.add_argument(
@@ -135,9 +137,9 @@ def main(args):
     else:
         # create experiment folder
         if args.sche:
-            exp_name = f"{args.model_type}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_sche{args.sche}_lrf{args.lrf}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}"
+            exp_name = f"{args.model_type}_{args.start_channel}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_sche{args.sche}_lrf{args.lrf}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}"
         else:
-            exp_name = f"{args.model_type}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}"
+            exp_name = f"{args.model_type}_{args.start_channel}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}"
         
         if args.diff:
             exp_name += "_difftrans"

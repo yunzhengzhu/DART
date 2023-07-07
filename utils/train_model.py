@@ -7,9 +7,10 @@ import os
 import random
 import time
 import math
+import nibabel as nib
 from argparse import ArgumentParser
 from model.lkunet import LKUNet
-from model.transform import SpatialTransform, DiffeomorphicTransform
+from model.transform import SpatialTransform, DiffeomorphicTransform, ResizeTransform
 from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE
 from utils.train_utils import EarlyStopping
 from utils.metric_utils import jacobian_determinant, compute_tre, compute_dice
@@ -19,6 +20,7 @@ from tensorboardX import SummaryWriter
 class baseTrainer:
     def __init__(self, args: ArgumentParser, mode: str = "train") -> None:
         self.args = args
+        self.downsample = args.downsample
         self.opt = args.opt
         self.lr = args.lr
         self.sche = args.sche
@@ -42,6 +44,7 @@ class baseTrainer:
         self.diff = args.diff
         self.pretrained = args.pretrained if mode == "train" else None
         self.rev_metric = args.rev_metric
+        self.blur_factor = args.blur_factor
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
@@ -150,6 +153,13 @@ class baseTrainer:
         if self.diff:
             self.diff_transform.to(self.device)
 
+        if self.blur_factor:
+            self.blur = ResizeTransform(factor=1/self.blur_factor)
+            self.deblur = ResizeTransform(factor=self.blur_factor)
+        else:
+            self.blur = None
+            self.deblur = None
+
     def __init_logger(self):
         if self.log:
             print("Initiate tensorboard logger", end=" ")
@@ -216,12 +226,18 @@ class Trainer(baseTrainer):
                     self.device
                 ), moving_mask.float().to(self.device)
 
-                #rf = self.model(moving_img, fixed_img)
                 rf = self.model(fixed_img, moving_img)
+                if self.blur:
+                    rf = self.blur(rf)
+
                 if self.diff:
                     D_rf = self.diff_transform(rf)
                 else:
                     D_rf = rf
+
+                if self.deblur:
+                    D_rf = self.deblur(D_rf)
+
                 moving_reg = self.spatial_transform(
                     moving_img, D_rf.permute(0, 2, 3, 4, 1)
                 )
@@ -359,12 +375,19 @@ class Trainer(baseTrainer):
                 ), moving_mask.float().to(self.device)
 
                 # pass data to model
-                #rf = self.model(moving_img, fixed_img)
                 rf = self.model(fixed_img, moving_img)
+                
+                if self.blur:
+                    rf = self.blur(rf)
+
                 if self.diff:
                     D_rf = self.diff_transform(rf)
                 else:
                     D_rf = rf
+
+                if self.deblur:
+                    D_rf = self.deblur(D_rf)
+
                 moving_reg = self.spatial_transform(
                     moving_img, D_rf.permute(0, 2, 3, 4, 1)
                 )
@@ -379,7 +402,8 @@ class Trainer(baseTrainer):
                     batch_tre,
                     batch_dice,
                 ) = self.__compute_metrics(
-                    D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
+                    D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
+                    downsample=self.downsample
                 )
                 val_num_foldings.extend(batch_num_foldings)
                 val_log_jac_det_std.extend(batch_log_jac_det_std)
@@ -388,10 +412,17 @@ class Trainer(baseTrainer):
                 
                 if self.rev_metric:
                     rrf = -rf
+                    if self.blur:
+                        rrf = self.blur(rrf)
+
                     if self.diff:
                         D_rrf = self.diff_transform(rrf)
                     else:
                         D_rrf = rrf
+
+                    if self.deblur:
+                        D_rf = self.deblur(D_rf)
+
                     fixed_reg = self.spatial_transform(
                         fixed_img, D_rrf.permute(0, 2, 3, 4, 1)
                     )
@@ -406,7 +437,8 @@ class Trainer(baseTrainer):
                         rev_batch_tre,
                         rev_batch_dice,
                     ) = self.__compute_metrics(
-                        D_rrf, moving_kp, fixed_kp, moving_mask, fixed_mask, fixed_mask_reg
+                        D_rrf, moving_kp, fixed_kp, moving_mask, fixed_mask, fixed_mask_reg,
+                        downsample=self.downsample
                     )
                     rev_val_num_foldings.extend(rev_batch_num_foldings)
                     rev_val_log_jac_det_std.extend(rev_batch_log_jac_det_std)
@@ -530,12 +562,17 @@ class Trainer(baseTrainer):
                 ), moving_mask.float().to(self.device)
 
                 # pass data to model
-                #rf = self.model(moving_img, fixed_img)
                 rf = self.model(fixed_img, moving_img)
+                if self.blur:
+                    rf = self.blur(rf)
+
                 if self.diff:
                     D_rf = self.diff_transform(rf)
                 else:
                     D_rf = rf
+
+                if self.deblur:
+                    D_rf = self.deblur(D_rf)
                 
                 moving_reg = self.spatial_transform(
                     moving_img, D_rf.permute(0, 2, 3, 4, 1)
@@ -551,7 +588,8 @@ class Trainer(baseTrainer):
                     batch_tre,
                     batch_dice,
                 ) = self.__compute_metrics(
-                    D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
+                    D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
+                    downsample=self.downsample
                 )
                 val_num_foldings.extend(batch_num_foldings)
                 val_log_jac_det_std.extend(batch_log_jac_det_std)
@@ -560,10 +598,17 @@ class Trainer(baseTrainer):
                 
                 if self.rev_metric:
                     rrf = -rf
+                    if self.blur:
+                        rrf = self.blur(rrf)
+
                     if self.diff:
                         D_rrf = self.diff_transform(rrf)
                     else:
                         D_rrf = rrf
+
+                    if self.deblur:
+                        D_rf = self.deblur(D_rf)
+
                     fixed_reg = self.spatial_transform(
                         fixed_img, D_rrf.permute(0, 2, 3, 4, 1)
                     )
@@ -578,7 +623,8 @@ class Trainer(baseTrainer):
                         rev_batch_tre,
                         rev_batch_dice,
                     ) = self.__compute_metrics(
-                        D_rrf, moving_kp, fixed_kp, moving_mask, fixed_mask, fixed_mask_reg
+                        D_rrf, moving_kp, fixed_kp, moving_mask, fixed_mask, fixed_mask_reg,
+                        downsample=self.downsample
                     )
                     rev_val_num_foldings.extend(rev_batch_num_foldings)
                     rev_val_log_jac_det_std.extend(rev_batch_log_jac_det_std)
@@ -692,7 +738,8 @@ class Trainer(baseTrainer):
 
     @staticmethod
     def __compute_metrics(
-        D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
+        D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
+        downsample=1
     ):
         batch_num_foldings, batch_log_jac_det_std, batch_tre, batch_dice = (
             [],
@@ -700,18 +747,29 @@ class Trainer(baseTrainer):
             [],
             [],
         )
+        H, W, D = D_rf.shape[2:]
+        # recover to the shape of original image
+        if downsample != 1:
+            D_rf = F.interpolate(D_rf, scale_factor=downsample, mode="trilinear")
+         
+        # denormalize the disp (to the scale of training images)
+        D_rf = ((D_rf.permute(0, 2, 3, 4, 1)) * (torch.tensor([H, W, D]).cuda()-1)).float()
 
         for subject_idx in range(len(D_rf)):
             # jacobian determinant
             num_foldings, log_jac_det_std = jacobian_determinant(
-                D_rf[subject_idx : subject_idx + 1].clone().detach().cpu().numpy()
+                D_rf[subject_idx : subject_idx + 1].permute(0, 4, 1, 2, 3)
+                .clone()
+                .detach()
+                .cpu()
+                .numpy()
             )
 
             # TRE keypoints
             tre = compute_tre(
                 fix_lms=fixed_kp[subject_idx].clone().detach().cpu().numpy(),
                 mov_lms=moving_kp[subject_idx].clone().detach().cpu().numpy(),
-                disp=D_rf.permute(0, 2, 3, 4, 1)[subject_idx] 
+                disp=D_rf[subject_idx]
                 .clone()
                 .detach()
                 .cpu()
@@ -720,20 +778,6 @@ class Trainer(baseTrainer):
                 spacing_mov=1.5,
             )  # spacing is 1.5 for NLST
             
-            #tre = compute_tre(
-            #    fix_lms=moving_kp[subject_idx].clone().detach().cpu().numpy(),
-            #    mov_lms=fixed_kp[subject_idx].clone().detach().cpu().numpy(),
-            #    disp=D_rf.permute(0, 2, 3, 4, 1)[subject_idx] 
-            #    .clone()
-            #    .detach()
-            #    .cpu()
-            #    .numpy(),
-            #    spacing_fix=1.5,
-            #    spacing_mov=1.5,
-            #)  # spacing is 1.5 for NLST
-            #print('TRE(fwd): {}'.format(fwd_tre))
-            #print('TRE(rev): {}'.format(tre))
-
             # Dice masks
             mean_dice, dice = compute_dice(
                 fixed=fixed_mask[subject_idx].clone().detach().cpu().numpy(),

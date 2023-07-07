@@ -82,6 +82,7 @@ def jacobian_determinant(disp):
         )
     )
 
+    jacdet = (jacdet + 3).clip(1e-9, 1e+9)
     return (jacdet <= 0).astype(float).sum(), np.log(jacdet).std()
 
 
