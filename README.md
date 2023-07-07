@@ -52,8 +52,11 @@ CUDA_VISIBLE_DEVICES='1' eval.py \
   - [x] NLST dataloader
   - [ ] ThoraxCBCT dataloader
 - Models
-  - [x] lkunet
-  - [ ] voxelmorph
+  - [ ] resnet + unet (baseline)
+  - [ ] unet (baseline architecture)
+  - [ ] lkunet (baseline architecture)
+  - [x] lkunet 
+  - [x] voxelmorph (unet)
   - [ ] transmorph
 - Loss Functions
   - [x] NCC
@@ -65,7 +68,7 @@ CUDA_VISIBLE_DEVICES='1' eval.py \
   - [ ] Mutual information (MI)
   - [ ] Local mutual information (LMI)
   - [ ] Modality independent neighbourhood descriptor with self-similarity context (MIND-SSC)
-  - [ ] MSE for keypoints
+  - [x] MSE for keypoints
   - [ ] ...
 - Metrics
   - [x] TRE(keypoints)
@@ -74,6 +77,7 @@ CUDA_VISIBLE_DEVICES='1' eval.py \
   - [ ] ...
 
 - Others
-  - [ ] need to double check displacement field saved format in learn2reg 
+  - [ ] save as nifti (original image size, real displacement)
   - [x] add scheduler (cosine, lambdacosine)
   - [ ] train val split
+  - [ ] early stopping metric
