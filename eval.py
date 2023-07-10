@@ -45,7 +45,7 @@ def main(args):
 
     # init dataset
     val_dataset = NLSTDataset(
-        data_dir=args.data_dir, json_file=args.json_file, mode="val"
+        data_dir=args.data_dir, json_file=args.json_file, mode="val", downsample=args.downsample
     )
 
     # init dataloader

@@ -60,6 +60,7 @@ def argParser():
     parser.add_argument("--opt", type=str, default="adam", help="optimizer")
     parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
     parser.add_argument("--sche", type=str, default=None, help="scheduler")
+    parser.add_argument("--use_scaler", action="store_true", default=False, help="use gradient scaler")
     parser.add_argument("--batch_size", type=int, default=1, help="batch size")
     parser.add_argument("--epochs", type=int, default=100, help="number of epochs")
     parser.add_argument(

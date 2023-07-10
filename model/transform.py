@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+import torch.nn.functional as F
 
 class SpatialTransform(nn.Module):
     def __init__(self):
@@ -79,3 +79,22 @@ class DiffeomorphicTransform(nn.Module):
                 align_corners=True,
             )
         return flow
+
+class ResizeTransform(nn.Module):
+
+    def __init__(self, factor=1):
+        super(ResizeTransform).__init__()
+        self.factor = factor
+
+    def forward(self, x):
+        if self.factor < 1:
+            # resize first to save memory
+            x = F.interpolate(x, scale_factor=self.factor, mode='trilinear')
+            x = self.factor * x
+
+        elif self.factor > 1:
+            # multiply first to save memory
+            x = self.factor * x
+            x = F.interpolate(x, scale_factor=self.factor, mode='trilinear')
+        
+        return x

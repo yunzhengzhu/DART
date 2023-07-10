@@ -155,45 +155,16 @@ class TRE:
     """
     def __init__(self, mode='round'):
         self.mode = mode
-
-    
-    #def __call__(self, fix_lms, mov_lms, disp, spacing_fix, spacing_mov):
-    #    '''
-    #    fix_lms: torch.tensor(1, 1, row, 3)
-    #    mov_lms: torch.tensor(1, 1, row, 3)
-    #    disp: torch.tensor(1, h, w, d, 3)
-    #    '''
-    #    if self.mode == 'round':
-    #        mov_lms = torch.round(mov_lms)
-    #    elif self.mode == 'bilinear':
-    #        raise NotImplementedError
-    #
-    #    mov_lms = mov_lms.to(torch.long).squeeze() # row, 3
-    #    fix_lms = fix_lms.squeeze() # row, 3
-    #    disp = disp.squeeze() # h, w, d, 3
-    #    mov_disp = disp[[mov_lms[:, 0], mov_lms[:, 1], mov_lms[:, 2]]] # row, 3
-    #    mov_lms_warped = mov_lms.to(float) + mov_disp.to(float)
-    #    import pdb
-    #    pdb.set_trace()
-    #    return torch.mean((fix_lms - mov_lms_warped) ** 2)
                                                                                            
-    #def __call__(self, fix_lms, mov_lms, disp, spacing_fix, spacing_mov):
-    #    mov_lms = mov_lms.squeeze() # row, 3
-    #    fix_lms = fix_lms.squeeze() # row, 3
-    #    gt_lmdiff = fix_lms - mov_lms
-
-    #    pred_lmsdiff = F.grid_sample(disp, (mov_lms / torch.tensor(disp.shape[2:]).cuda() * 2 - 1).view(1, -1, 1, 1, 3), mode='bilinear').squeeze().t()
-    #    return torch.mean((gt_lmdiff - pred_lmsdiff) ** 2)
-    
-    def __call__(self, fix_lms, mov_lms, disp, spacing_fix, spacing_mov, normalize=True):
-        mov_lms = mov_lms.squeeze() # row, 3
-        fix_lms = fix_lms.squeeze() # row, 3
-        
+    def __call__(self, fix_lms, mov_lms, disp, spacing_fix, spacing_mov, downsample=1, normalize=True):
+        mov_lms = mov_lms.squeeze().flip(-1) # row, 3
+        fix_lms = fix_lms.squeeze().flip(-1) # row, 3
+        H, W, D = disp.shape[2:]
         if normalize:
-            mov_lms = mov_lms / torch.tensor(disp.shape[2:]).cuda() * 2 - 1
-            fix_lms = fix_lms / torch.tensor(disp.shape[2:]).cuda() * 2 - 1
+            mov_lms = mov_lms / torch.tensor([H*downsample, W*downsample, D*downsample]).cuda() * 2 - 1
+            fix_lms = fix_lms / torch.tensor([H*downsample, W*downsample, D*downsample]).cuda() * 2 - 1
 
         gt_lmdiff = mov_lms - fix_lms
 
         pred_lmsdiff = F.grid_sample(disp, fix_lms.view(1, -1, 1, 1, 3), mode='bilinear').squeeze().t()
-        return torch.mean((gt_lmdiff - pred_lmsdiff) ** 2)
+        return torch.nn.MSELoss()(pred_lmsdiff, gt_lmdiff)

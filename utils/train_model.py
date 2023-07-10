@@ -10,6 +10,8 @@ import math
 import nibabel as nib
 from argparse import ArgumentParser
 from model.lkunet import LKUNet
+from model.resunet import ResUNetReg
+from model.unet import UNetReg
 from model.transform import SpatialTransform, DiffeomorphicTransform, ResizeTransform
 from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE
 from utils.train_utils import EarlyStopping
@@ -21,6 +23,7 @@ class baseTrainer:
     def __init__(self, args: ArgumentParser, mode: str = "train") -> None:
         self.args = args
         self.downsample = args.downsample
+        self.use_scaler = args.use_scaler
         self.opt = args.opt
         self.lr = args.lr
         self.sche = args.sche
@@ -52,8 +55,17 @@ class baseTrainer:
         self.__init_loss()
         self.__init_optimizer()
         self.__init_scheduler()
+        self.__init_scaler()
         self.__init_logger()
         self.__init_es()
+
+    def __init_scaler(self):
+        if self.use_scaler:
+            print(f"Initiate gradient scaler", end=" ")
+            self.scaler = torch.cuda.amp.GradScaler()
+            print("...done")
+        else:
+            self.scaler = None
 
     def __init_optimizer(self):
         print(f"Initiate {self.opt} optimizer", end=" ")
@@ -126,10 +138,11 @@ class baseTrainer:
                 in_channel=2, n_classes=3, start_channel=self.start_channel, layer_type='lku'
             )
             print(self.model)
-        elif self.model_type == "Voxelmorph":
-            self.model = LKUNet(
-                in_channel=2, n_classes=3, start_channel=self.start_channel, layer_type='vxm'
-            )
+        elif self.model_type == "ResUNet":
+            self.model = ResUNetReg()
+            print(self.model)
+        elif self.model_type == "UNet":
+            self.model = UNetReg(kernel='regular')
             print(self.model)
         else:
             raise NotImplementedError
@@ -200,9 +213,9 @@ class Trainer(baseTrainer):
         train_loader: torch.utils.data.DataLoader,
         val_loader: torch.utils.data.DataLoader,
     ) -> pd.DataFrame:
-        self.model.train()
         # loop through epochs
         for i in range(self.start_epoch, self.epochs):
+            self.model.train()
             print(f"------------Epoch {i+1}/{self.epochs}------------")
             # training
             train_loss_sum = 0
@@ -226,52 +239,103 @@ class Trainer(baseTrainer):
                     self.device
                 ), moving_mask.float().to(self.device)
 
-                rf = self.model(fixed_img, moving_img)
-                if self.blur:
-                    rf = self.blur(rf)
+                if self.scaler:
+                    with torch.cuda.amp.autocast():
+                        rf = self.model(fixed_img, moving_img)
+                        if self.blur:
+                            rf = self.blur(rf)
 
-                if self.diff:
-                    D_rf = self.diff_transform(rf)
+                        if self.diff:
+                            D_rf = self.diff_transform(rf)
+                        else:
+                            D_rf = rf
+
+                        if self.deblur:
+                            D_rf = self.deblur(D_rf)
+
+                        moving_reg = self.spatial_transform(
+                            moving_img, D_rf.permute(0, 2, 3, 4, 1)
+                        )
+                        moving_mask_reg = self.spatial_transform(
+                            moving_mask, D_rf.permute(0, 2, 3, 4, 1)
+                        )
+
+                        # compute metrics
+                        #(
+                        #   batch_num_fold,
+                        #   batch_log_jac_det_std,
+                        #   batch_tre,
+                        #   batch_dice,
+                        #) = self.__compute_metrics(
+                        #   D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
+                        #)
+                        # train_jac_det.extend(batch_jac_det)
+                        # train_tre.extend(batch_tre)
+                        # train_dice.extend(batch_dice)
+
+                        train_loss, train_all_loss = self.__compute_loss(
+                            self.loss_fn,
+                            fixed_img,
+                            moving_reg,
+                            fixed_mask,
+                            moving_mask_reg,
+                            fixed_kp,
+                            moving_kp,
+                            rf,
+                            mode="train",
+                            downsample=self.downsample,
+                        )
+
+                    self.scaler.scale(train_loss).backward()
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
                 else:
-                    D_rf = rf
+                    rf = self.model(fixed_img, moving_img)
+                    if self.blur:
+                        rf = self.blur(rf)
 
-                if self.deblur:
-                    D_rf = self.deblur(D_rf)
+                    if self.diff:
+                        D_rf = self.diff_transform(rf)
+                    else:
+                        D_rf = rf
 
-                moving_reg = self.spatial_transform(
-                    moving_img, D_rf.permute(0, 2, 3, 4, 1)
-                )
-                moving_mask_reg = self.spatial_transform(
-                    moving_mask, D_rf.permute(0, 2, 3, 4, 1)
-                )
+                    if self.deblur:
+                        D_rf = self.deblur(D_rf)
 
-                # compute metrics
-                #(
-                #   batch_num_fold,
-                #   batch_log_jac_det_std,
-                #   batch_tre,
-                #   batch_dice,
-                #) = self.__compute_metrics(
-                #   D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
-                #)
-                # train_jac_det.extend(batch_jac_det)
-                # train_tre.extend(batch_tre)
-                # train_dice.extend(batch_dice)
+                    moving_reg = self.spatial_transform(
+                        moving_img, D_rf.permute(0, 2, 3, 4, 1)
+                    )
+                    moving_mask_reg = self.spatial_transform(
+                        moving_mask, D_rf.permute(0, 2, 3, 4, 1)
+                    )
 
-                train_loss, train_all_loss = self.__compute_loss(
-                    self.loss_fn,
-                    fixed_img,
-                    moving_reg,
-                    fixed_mask,
-                    moving_mask_reg,
-                    fixed_kp,
-                    moving_kp,
-                    rf,
-                    mode="train",
-                )
+                    # compute metrics
+                    #(
+                    #   batch_num_fold,
+                    #   batch_log_jac_det_std,
+                    #   batch_tre,
+                    #   batch_dice,
+                    #) = self.__compute_metrics(
+                    #   D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
+                    #)
+                    # train_jac_det.extend(batch_jac_det)
+                    # train_tre.extend(batch_tre)
+                    # train_dice.extend(batch_dice)
 
-                train_loss.backward()
-                self.optimizer.step()
+                    train_loss, train_all_loss = self.__compute_loss(
+                        self.loss_fn,
+                        fixed_img,
+                        moving_reg,
+                        fixed_mask,
+                        moving_mask_reg,
+                        fixed_kp,
+                        moving_kp,
+                        rf,
+                        mode="train",
+                        downsample=self.downsample,
+                    )
+                    train_loss.backward()
+                    self.optimizer.step()
                 self.optimizer.zero_grad()
                 train_loss_sum += train_loss.item()
                 for l, loss_value in train_sub_loss_sum.items():
@@ -373,27 +437,51 @@ class Trainer(baseTrainer):
                 fixed_mask, moving_mask = fixed_mask.float().to(
                     self.device
                 ), moving_mask.float().to(self.device)
-
-                # pass data to model
-                rf = self.model(fixed_img, moving_img)
                 
-                if self.blur:
-                    rf = self.blur(rf)
+                if self.scaler:
+                    with torch.cuda.amp.autocast():
+                        # pass data to model
+                        rf = self.model(fixed_img, moving_img)
+                        
+                        if self.blur:
+                            rf = self.blur(rf)
 
-                if self.diff:
-                    D_rf = self.diff_transform(rf)
+                        if self.diff:
+                            D_rf = self.diff_transform(rf)
+                        else:
+                            D_rf = rf
+
+                        if self.deblur:
+                            D_rf = self.deblur(D_rf)
+
+                        moving_reg = self.spatial_transform(
+                            moving_img, D_rf.permute(0, 2, 3, 4, 1)
+                        )
+                        moving_mask_reg = self.spatial_transform(
+                            moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
+                        )
                 else:
-                    D_rf = rf
+                    # pass data to model
+                    rf = self.model(fixed_img, moving_img)
+                    
+                    if self.blur:
+                        rf = self.blur(rf)
 
-                if self.deblur:
-                    D_rf = self.deblur(D_rf)
+                    if self.diff:
+                        D_rf = self.diff_transform(rf)
+                    else:
+                        D_rf = rf
 
-                moving_reg = self.spatial_transform(
-                    moving_img, D_rf.permute(0, 2, 3, 4, 1)
-                )
-                moving_mask_reg = self.spatial_transform(
-                    moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
-                )
+                    if self.deblur:
+                        D_rf = self.deblur(D_rf)
+
+                    moving_reg = self.spatial_transform(
+                        moving_img, D_rf.permute(0, 2, 3, 4, 1)
+                    )
+                    moving_mask_reg = self.spatial_transform(
+                        moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
+                    )
+
                 
                 # compute metrics
                 (
@@ -403,7 +491,7 @@ class Trainer(baseTrainer):
                     batch_dice,
                 ) = self.__compute_metrics(
                     D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
-                    downsample=self.downsample
+                    downsample=self.downsample,
                 )
                 val_num_foldings.extend(batch_num_foldings)
                 val_log_jac_det_std.extend(batch_log_jac_det_std)
@@ -438,7 +526,7 @@ class Trainer(baseTrainer):
                         rev_batch_dice,
                     ) = self.__compute_metrics(
                         D_rrf, moving_kp, fixed_kp, moving_mask, fixed_mask, fixed_mask_reg,
-                        downsample=self.downsample
+                        downsample=self.downsample,
                     )
                     rev_val_num_foldings.extend(rev_batch_num_foldings)
                     rev_val_log_jac_det_std.extend(rev_batch_log_jac_det_std)
@@ -456,6 +544,7 @@ class Trainer(baseTrainer):
                     moving_kp,
                     rf,
                     mode="val",
+                    downsample=self.downsample,
                 )
                 
                 val_loss_sum += val_loss.item()
@@ -561,25 +650,47 @@ class Trainer(baseTrainer):
                     self.device
                 ), moving_mask.float().to(self.device)
 
-                # pass data to model
-                rf = self.model(fixed_img, moving_img)
-                if self.blur:
-                    rf = self.blur(rf)
+                if self.scaler:
+                    with torch.cuda.amp.autocast():
+                        # pass data to model
+                        rf = self.model(fixed_img, moving_img)
+                        if self.blur:
+                            rf = self.blur(rf)
 
-                if self.diff:
-                    D_rf = self.diff_transform(rf)
+                        if self.diff:
+                            D_rf = self.diff_transform(rf)
+                        else:
+                            D_rf = rf
+
+                        if self.deblur:
+                            D_rf = self.deblur(D_rf)
+                        
+                        moving_reg = self.spatial_transform(
+                            moving_img, D_rf.permute(0, 2, 3, 4, 1)
+                        )
+                        moving_mask_reg = self.spatial_transform(
+                            moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
+                        )
                 else:
-                    D_rf = rf
+                    # pass data to model
+                    rf = self.model(fixed_img, moving_img)
+                    if self.blur:
+                        rf = self.blur(rf)
 
-                if self.deblur:
-                    D_rf = self.deblur(D_rf)
-                
-                moving_reg = self.spatial_transform(
-                    moving_img, D_rf.permute(0, 2, 3, 4, 1)
-                )
-                moving_mask_reg = self.spatial_transform(
-                    moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
-                )
+                    if self.diff:
+                        D_rf = self.diff_transform(rf)
+                    else:
+                        D_rf = rf
+
+                    if self.deblur:
+                        D_rf = self.deblur(D_rf)
+                    
+                    moving_reg = self.spatial_transform(
+                        moving_img, D_rf.permute(0, 2, 3, 4, 1)
+                    )
+                    moving_mask_reg = self.spatial_transform(
+                        moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
+                    )
 
                 # compute metrics
                 (
@@ -589,7 +700,7 @@ class Trainer(baseTrainer):
                     batch_dice,
                 ) = self.__compute_metrics(
                     D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
-                    downsample=self.downsample
+                    downsample=self.downsample,
                 )
                 val_num_foldings.extend(batch_num_foldings)
                 val_log_jac_det_std.extend(batch_log_jac_det_std)
@@ -624,7 +735,7 @@ class Trainer(baseTrainer):
                         rev_batch_dice,
                     ) = self.__compute_metrics(
                         D_rrf, moving_kp, fixed_kp, moving_mask, fixed_mask, fixed_mask_reg,
-                        downsample=self.downsample
+                        downsample=self.downsample,
                     )
                     rev_val_num_foldings.extend(rev_batch_num_foldings)
                     rev_val_log_jac_det_std.extend(rev_batch_log_jac_det_std)
@@ -641,6 +752,7 @@ class Trainer(baseTrainer):
                     moving_kp,
                     rf,
                     mode="val",
+                    downsample=self.downsample,
                 )
                 val_loss_sum += val_loss.item()
                 for l, loss_value in val_sub_loss_sum.items():
@@ -751,10 +863,13 @@ class Trainer(baseTrainer):
         # recover to the shape of original image
         if downsample != 1:
             D_rf = F.interpolate(D_rf, scale_factor=downsample, mode="trilinear")
-         
-        # denormalize the disp (to the scale of training images)
-        D_rf = ((D_rf.permute(0, 2, 3, 4, 1)) * (torch.tensor([H, W, D]).cuda()-1)).float()
+            fixed_mask = F.interpolate(fixed_mask, scale_factor=downsample, mode="trilinear")
+            moving_mask = F.interpolate(moving_mask, scale_factor=downsample, mode="trilinear")
+            moving_mask_reg = F.interpolate(moving_mask_reg, scale_factor=downsample, mode="trilinear")
 
+        # denormalize the disp (to the scale of training images)
+        D_rf = ((D_rf.permute(0, 2, 3, 4, 1)) * (torch.tensor([D, H, W]).cuda()-1)).flip(-1).float()
+        
         for subject_idx in range(len(D_rf)):
             # jacobian determinant
             num_foldings, log_jac_det_std = jacobian_determinant(
@@ -774,8 +889,8 @@ class Trainer(baseTrainer):
                 .detach()
                 .cpu()
                 .numpy(),
-                spacing_fix=1.5,
-                spacing_mov=1.5,
+                spacing_fix=(1.5, 1.5, 1.5),
+                spacing_mov=(1.5, 1.5, 1.5),
             )  # spacing is 1.5 for NLST
             
             # Dice masks
@@ -797,7 +912,7 @@ class Trainer(baseTrainer):
 
     @staticmethod
     def __compute_loss(
-        loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, fixed_kp, moving_kp, rf, mode="train"
+        loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, fixed_kp, moving_kp, rf, mode="train", downsample=1
     ):
         loss = 0.0
         all_loss = {}
@@ -836,6 +951,7 @@ class Trainer(baseTrainer):
                     disp=rf,
                     spacing_fix=1.5,
                     spacing_mov=1.5,
+                    downsample=downsample
                 ) * lw[1]
                 loss += tre_loss
                 all_loss["TRE"] = tre_loss.item()
