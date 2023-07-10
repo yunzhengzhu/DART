@@ -52,9 +52,9 @@ CUDA_VISIBLE_DEVICES='1' eval.py \
   - [x] NLST dataloader
   - [ ] ThoraxCBCT dataloader
 - Models
-  - [ ] resnet + unet (baseline)
-  - [ ] unet (baseline architecture)
-  - [ ] lkunet (baseline architecture)
+  - [x] resnet + unet (baseline)
+  - [x] unet (baseline architecture)
+  - [x] lkunet (baseline architecture)
   - [x] lkunet 
   - [x] voxelmorph (unet)
   - [ ] transmorph

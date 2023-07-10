@@ -45,6 +45,7 @@ class baseTrainer:
         self.log = args.log
         self.print_every = args.print_every
         self.diff = args.diff
+        self.freeze = args.freeze
         self.pretrained = args.pretrained if mode == "train" else None
         self.rev_metric = args.rev_metric
         self.blur_factor = args.blur_factor
@@ -146,7 +147,14 @@ class baseTrainer:
             print(self.model)
         else:
             raise NotImplementedError
+            
         print("...done")
+
+        if self.freeze:
+            print(f"Freezing {self.freeze}")
+            for name, param in self.model.named_parameters():
+                if self.freeze in name:
+                    param.requires_grad = False
 
         if self.pretrained:
             print("Load pretrained model", end=" ")
@@ -460,6 +468,19 @@ class Trainer(baseTrainer):
                         moving_mask_reg = self.spatial_transform(
                             moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                         )
+                        
+                        val_loss, val_all_loss = self.__compute_loss(
+                            self.loss_fn,
+                            fixed_img,
+                            moving_reg,
+                            fixed_mask,
+                            moving_mask_reg,
+                            fixed_kp,
+                            moving_kp,
+                            rf,
+                            mode="val",
+                            downsample=self.downsample,
+                        )
                 else:
                     # pass data to model
                     rf = self.model(fixed_img, moving_img)
@@ -480,6 +501,19 @@ class Trainer(baseTrainer):
                     )
                     moving_mask_reg = self.spatial_transform(
                         moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
+                    )
+                    
+                    val_loss, val_all_loss = self.__compute_loss(
+                        self.loss_fn,
+                        fixed_img,
+                        moving_reg,
+                        fixed_mask,
+                        moving_mask_reg,
+                        fixed_kp,
+                        moving_kp,
+                        rf,
+                        mode="val",
+                        downsample=self.downsample,
                     )
 
                 
@@ -533,20 +567,6 @@ class Trainer(baseTrainer):
                     rev_val_tre.extend(rev_batch_tre)
                     rev_val_dice.extend(rev_batch_dice)
 
-
-                val_loss, val_all_loss = self.__compute_loss(
-                    self.loss_fn,
-                    fixed_img,
-                    moving_reg,
-                    fixed_mask,
-                    moving_mask_reg,
-                    fixed_kp,
-                    moving_kp,
-                    rf,
-                    mode="val",
-                    downsample=self.downsample,
-                )
-                
                 val_loss_sum += val_loss.item()
                 for l, loss_value in val_sub_loss_sum.items():
                     val_sub_loss_sum[l] = loss_value + val_all_loss[l]
@@ -671,6 +691,18 @@ class Trainer(baseTrainer):
                         moving_mask_reg = self.spatial_transform(
                             moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                         )
+                        val_loss, val_all_loss = self.__compute_loss(
+                            self.loss_fn,
+                            fixed_img,
+                            moving_reg,
+                            fixed_mask,
+                            moving_mask_reg,
+                            fixed_kp,
+                            moving_kp,
+                            rf,
+                            mode="val",
+                            downsample=self.downsample,
+                        )
                 else:
                     # pass data to model
                     rf = self.model(fixed_img, moving_img)
@@ -690,6 +722,19 @@ class Trainer(baseTrainer):
                     )
                     moving_mask_reg = self.spatial_transform(
                         moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
+                    )
+                    
+                    val_loss, val_all_loss = self.__compute_loss(
+                        self.loss_fn,
+                        fixed_img,
+                        moving_reg,
+                        fixed_mask,
+                        moving_mask_reg,
+                        fixed_kp,
+                        moving_kp,
+                        rf,
+                        mode="val",
+                        downsample=self.downsample,
                     )
 
                 # compute metrics
@@ -742,18 +787,6 @@ class Trainer(baseTrainer):
                     rev_val_tre.extend(rev_batch_tre)
                     rev_val_dice.extend(rev_batch_dice)
 
-                val_loss, val_all_loss = self.__compute_loss(
-                    self.loss_fn,
-                    fixed_img,
-                    moving_reg,
-                    fixed_mask,
-                    moving_mask_reg,
-                    fixed_kp,
-                    moving_kp,
-                    rf,
-                    mode="val",
-                    downsample=self.downsample,
-                )
                 val_loss_sum += val_loss.item()
                 for l, loss_value in val_sub_loss_sum.items():
                     val_sub_loss_sum[l] = loss_value + val_all_loss[l]
