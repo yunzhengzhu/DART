@@ -81,9 +81,9 @@ def jacobian_determinant(disp):
             - jacobian[0, 2, :, :, :] * jacobian[1, 1, :, :, :]
         )
     )
-
+    
     jacdet = (jacdet + 3).clip(1e-9, 1e+9)
-    return (jacdet <= 0).astype(float).sum(), np.log(jacdet).std()
+    return (jacdet <= 0).astype(float).sum(), np.log(jacdet)
 
 
 def compute_tre(fix_lms, mov_lms, disp, spacing_fix, spacing_mov):
