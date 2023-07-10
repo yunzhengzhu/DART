@@ -775,8 +775,10 @@ class Trainer(baseTrainer):
                         D= val_loader.dataset.D // self.downsample
 
                         subject_id = subject["moving"].split("/")[-1].split("_")[1]
+                        if self.downsample > 1:
+                            D_rf = F.interpolate(D_rf,scale_factor=self.downsample,mode='trilinear')
                         D_rf=((D_rf.permute(0,2,3,4,1))*(torch.tensor([D,W,H]).cuda()-1)).flip(-1).float().squeeze().cpu()
-                        nib.save(nib.Nifti1Image(D_rf[iidx].numpy(), np.eye(4)), 
+                        nib.save(nib.Nifti1Image(D_rf.numpy(), np.eye(4)), 
                                  os.path.join(self.exp_dir,"displacement_field", 
                                               f'disp_{str(subject_id).zfill(4)}_{str(subject_id).zfill(4)}.nii.gz'))
             
