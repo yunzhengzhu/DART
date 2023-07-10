@@ -10,6 +10,7 @@ import math
 import nibabel as nib
 from argparse import ArgumentParser
 from model.lkunet import LKUNet
+from model.resunet import ResUNet
 from model.transform import SpatialTransform, DiffeomorphicTransform, ResizeTransform
 from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE
 from utils.train_utils import EarlyStopping
@@ -131,6 +132,8 @@ class baseTrainer:
                 in_channel=2, n_classes=3, start_channel=self.start_channel, layer_type='vxm'
             )
             print(self.model)
+        elif self.model_type == 'ResUNet':
+            self.model = ResUNet()
         else:
             raise NotImplementedError
         print("...done")
@@ -658,17 +661,16 @@ class Trainer(baseTrainer):
                             * val_loader.batch_size
                         ]
                     ):
+                        H= val_loader.dataset.H // self.downsample
+                        W= val_loader.dataset.W // self.downsample
+                        D= val_loader.dataset.D // self.downsample
+
                         subject_id = subject["moving"].split("/")[-1].split("_")[1]
-                        np.save(
-                            os.path.join(
-                                self.exp_dir,
-                                "displacement_field",
-                                "disp_NLST_{}.npy".format(
-                                    subject_id
-                                ),  # need to change when doing another task
-                            ),
-                            D_rf[iidx].permute(1, 2, 3, 0).detach().cpu().numpy(),
-                        )
+                        D_rf=((D_rf.permute(0,2,3,4,1))*(torch.tensor([D,W,H]).cuda()-1)).flip(-1).float().squeeze().cpu()
+                        nib.save(nib.Nifti1Image(D_rf[iidx].numpy(), np.eye(4)), 
+                                 os.path.join(self.exp_dir,"displacement_field", 
+                                              f'disp_{str(subject_id).zfill(4)}_{str(subject_id).zfill(4)}.nii.gz'))
+            
 
         val_loss_mean = val_loss_sum / len(val_loader)
         val_sub_loss_mean = {
