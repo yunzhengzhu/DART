@@ -22,6 +22,10 @@ class NLSTDataset(Dataset):
             file_contents = jf.read()
             jdict = json.loads(file_contents)
 
+        self.H = jdict['tensorImageShape']['0'][0]
+        self.W = jdict['tensorImageShape']['0'][1]
+        self.D = jdict['tensorImageShape']['0'][2]
+
         # get subjects based on mode
         if mode == "train":
             subjects = jdict["training_paired_images"]
