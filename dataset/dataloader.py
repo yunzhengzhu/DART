@@ -49,23 +49,19 @@ class NLSTDataset(Dataset):
         fixed_img_path = os.path.join(self.data_dir, fixed_relative_path)
         moving_img_path = os.path.join(self.data_dir, moving_relative_path)
 
-        fixed_img = self.__load_nii_img(fixed_img_path, preprocess=True, downsample=self.downsample)[None, ...]
-        moving_img = self.__load_nii_img(moving_img_path, preprocess=True, downsample=self.downsample)[None, ...]
+        fixed_img = self.__load_nii_img(fixed_img_path, preprocess=False, downsample=self.downsample)[None, ...]
+        moving_img = self.__load_nii_img(moving_img_path, preprocess=False, downsample=self.downsample)[None, ...]
 
         # load fixed and moving keypoints
-        fixed_kp = np.flip(
-            np.genfromtxt(
-                fixed_img_path.replace("images", "keypoints").replace("nii.gz", "csv"),
-                delimiter=",",
-            ), axis=-1
-        ).copy()[None, ...] #/ self.downsample
+        fixed_kp = np.genfromtxt(
+                        fixed_img_path.replace("images", "keypoints").replace("nii.gz", "csv"),
+                        delimiter=",",
+                   )[None, ...] #/ self.downsample
         
-        moving_kp = np.flip(
-            np.genfromtxt(
-                moving_img_path.replace("images", "keypoints").replace("nii.gz", "csv"),
-                delimiter=",",
-            ), axis=-1
-        ).copy()[None, ...] #/ self.downsample
+        moving_kp = np.genfromtxt(
+                        moving_img_path.replace("images", "keypoints").replace("nii.gz", "csv"),
+                        delimiter=",",
+                    )[None, ...] #/ self.downsample
         
         # load masks
         fixed_mask = self.__load_nii_img(
