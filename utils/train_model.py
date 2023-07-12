@@ -885,7 +885,7 @@ class Trainer(baseTrainer):
     @staticmethod
     def __compute_metrics(
         D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
-        downsample=1
+        downsample=1, use_mask='fixed',
     ):
         batch_num_foldings, batch_log_jac_det_std, batch_tre, batch_dice = (
             [],
@@ -903,16 +903,24 @@ class Trainer(baseTrainer):
 
         # denormalize the disp (to the scale of training images)
         D_rf = ((D_rf.permute(0, 2, 3, 4, 1)) * (torch.tensor([D, H, W]).cuda()-1)).flip(-1).float()
-        
         for subject_idx in range(len(D_rf)):
             # jacobian determinant
-            num_foldings, log_jac_det_std = jacobian_determinant(
+            num_foldings, log_jac_det = jacobian_determinant(
                 D_rf[subject_idx : subject_idx + 1].permute(0, 4, 1, 2, 3)
                 .clone()
                 .detach()
                 .cpu()
                 .numpy()
             )
+            
+            if use_mask != None:
+                mask = fixed_mask if use_mask == 'fixed' else moving_mask 
+                log_jac_det_std = np.ma.MaskedArray(
+                    log_jac_det, 1-mask.squeeze().clone().detach().cpu().numpy()[2:-2, 2:-2, 2:-2]
+                ).std()
+            else:
+                log_jac_det_std = log_jac_det.std()
+
 
             # TRE keypoints
             tre = compute_tre(

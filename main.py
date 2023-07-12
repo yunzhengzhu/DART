@@ -146,13 +146,13 @@ def main(args):
             exp_name = f"{args.model_type}_{args.start_channel}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}"
         
         if args.freeze:
-            exp_name += "freeze{args.freeze}"
+            exp_name += f"_freeze{args.freeze}"
 
         if args.use_scaler:
             exp_name += "_scaler"
 
         if args.blur_factor:
-            exp_name += "_blur{args.blur_factor}"
+            exp_name += f"_blur{args.blur_factor}"
 
         if args.diff:
             exp_name += "_difftrans"

@@ -167,5 +167,5 @@ class TRE:
 
         gt_lmdiff = mov_lms - fix_lms
 
-        pred_lmsdiff = F.grid_sample(disp, fix_lms.view(1, -1, 1, 1, 3), mode='bilinear').squeeze().t()
+        pred_lmsdiff = F.grid_sample(disp, fix_lms.view(1, -1, 1, 1, 3), align_corners=True, mode='bilinear').squeeze().t()
         return torch.nn.MSELoss()(pred_lmsdiff, gt_lmdiff)
