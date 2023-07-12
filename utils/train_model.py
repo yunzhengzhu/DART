@@ -49,6 +49,7 @@ class baseTrainer:
         self.pretrained = args.pretrained if mode == "train" else None
         self.rev_metric = args.rev_metric
         self.blur_factor = args.blur_factor
+        self.es_criterion = args.es_criterion
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
@@ -625,12 +626,20 @@ class Trainer(baseTrainer):
 
         # early stopping
         if self.es:
-            self.early_stopping(
-                epoch=cur,
-                val_loss=val_loss_mean,
-                model=self.model,
-                ckpt_path=self.es_ckpt_path,
-            )
+            if self.es_criterion == 'total':
+                self.early_stopping(
+                    epoch=cur,
+                    val_loss=val_loss_mean,
+                    model=self.model,
+                    ckpt_path=self.es_ckpt_path,
+                )
+            else:
+                self.early_stopping(
+                    epoch=cur,
+                    val_loss=val_sub_loss_mean[self.es_criterion],
+                    model=self.model,
+                    ckpt_path=self.es_ckpt_path,
+                )   
             return self.early_stopping.early_stop
         else:
             return False
@@ -763,7 +772,7 @@ class Trainer(baseTrainer):
                         D_rrf = rrf
 
                     if self.deblur:
-                        D_rf = self.deblur(D_rf)
+                        D_rrf = self.deblur(D_rrf)
 
                     fixed_reg = self.spatial_transform(
                         fixed_img, D_rrf.permute(0, 2, 3, 4, 1)

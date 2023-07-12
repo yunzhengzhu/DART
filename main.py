@@ -57,7 +57,7 @@ def argParser():
         "--loss",
         nargs="+",
         help="list of loss",
-        default=["NCC", "Smooth"],
+        default=["TRE"],
         type=str,
     )
     parser.add_argument(
@@ -82,6 +82,9 @@ def argParser():
     parser.add_argument("--lrf", type=float, default=None, help="learning rate factor")
     parser.add_argument(
         "--es", action="store_true", default=False, help="early stopping"
+    )
+    parser.add_argument(
+        "--es_criterion", type=str, default='total', help="early stopping criterion"
     )
     parser.add_argument(
         "--es_warmup", type=int, default=0, help="early stopping warmup"
@@ -128,6 +131,9 @@ def argParser():
 def main(args):
     # set seed
     set_seed(args.seed)
+
+    if args.es_criterion not in args.loss:
+        raise ValueError("Early stopping criterion not in loss!")
 
     # continue training on previous checkpoint
     if args.continue_training:
