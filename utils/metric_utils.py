@@ -119,6 +119,7 @@ def compute_dice_coefficient(mask_gt, mask_pred):
 
 
 def compute_dice(fixed, moving, moving_warped, labels):
+    moving_warped = moving_warped.round()
     dice = []
     for i in labels:
         if ((fixed == i).sum() == 0) or ((moving == i).sum() == 0):
