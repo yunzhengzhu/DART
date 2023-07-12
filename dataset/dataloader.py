@@ -11,11 +11,12 @@ from typing import Tuple
 
 
 class NLSTDataset(Dataset):
-    def __init__(self, data_dir: str, json_file: str, mode: str = "train", downsample: int = 1) -> None:
+    def __init__(self, data_dir: str, json_file: str, mode: str = "train", downsample: int = 1, preprocess: bool = False) -> None:
         self.data_dir = data_dir
         self.json_file = json_file
         self.mode = mode
         self.downsample = downsample
+        self.preprocess = preprocess
 
         # read json file
         with open(os.path.join(data_dir, json_file)) as jf:
@@ -49,8 +50,8 @@ class NLSTDataset(Dataset):
         fixed_img_path = os.path.join(self.data_dir, fixed_relative_path)
         moving_img_path = os.path.join(self.data_dir, moving_relative_path)
 
-        fixed_img = self.__load_nii_img(fixed_img_path, preprocess=False, downsample=self.downsample)[None, ...]
-        moving_img = self.__load_nii_img(moving_img_path, preprocess=False, downsample=self.downsample)[None, ...]
+        fixed_img = self.__load_nii_img(fixed_img_path, preprocess=self.preprocess, downsample=self.downsample)[None, ...]
+        moving_img = self.__load_nii_img(moving_img_path, preprocess=self.preprocess, downsample=self.downsample)[None, ...]
 
         # load fixed and moving keypoints
         fixed_kp = np.genfromtxt(

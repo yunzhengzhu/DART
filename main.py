@@ -28,6 +28,13 @@ def argParser():
     parser.add_argument(
         "--downsample", type=int, default=1, help="downsample factor on all dims"
     )
+    parser.add_argument(
+        "--preprocess",
+        action="store_true",
+        default=False,
+        help="preprocess images",
+    )    
+    
     # model
     parser.add_argument("--model_type", type=str, default="LKU-Net", help="model name")
     parser.add_argument(
@@ -171,10 +178,10 @@ def main(args):
         model = Trainer(args, mode="train")
     # init dataset
     train_dataset = NLSTDataset(
-        data_dir=args.data_dir, json_file=args.json_file, mode="train", downsample=args.downsample
+        data_dir=args.data_dir, json_file=args.json_file, mode="train", downsample=args.downsample, preprocess=args.preprocess
     )
     val_dataset = NLSTDataset(
-        data_dir=args.data_dir, json_file=args.json_file, mode="val", downsample=args.downsample
+        data_dir=args.data_dir, json_file=args.json_file, mode="val", downsample=args.downsample, preprocess = args.preprocess
     )
 
     # init dataloader
