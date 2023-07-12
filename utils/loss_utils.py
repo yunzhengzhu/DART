@@ -50,7 +50,7 @@ class NCC(torch.nn.Module):
         I2 = I * I
         J2 = J * J
         IJ = I * J
-
+        
         # compute filters
         # compute local sums via convolution
         I_sum = conv_fn(I, weight, padding=int(win_size / 2))
@@ -67,7 +67,7 @@ class NCC(torch.nn.Module):
         cross = IJ_sum - u_J * I_sum - u_I * J_sum + u_I * u_J * win_size
         I_var = I2_sum - 2 * u_I * I_sum + u_I * u_I * win_size
         J_var = J2_sum - 2 * u_J * J_sum + u_J * u_J * win_size
-
+        
         cc = cross * cross / (I_var * J_var + self.eps)
 
         # return negative cc.

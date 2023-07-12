@@ -26,6 +26,8 @@ def argParser():
         "--result_dir", type=str, default="./results", help="path to output directory"
     )
     parser.add_argument(
+        "--preprocess", action="store_true", default=False, help="clipping from -1000 to 500 and min-max norm")
+    parser.add_argument(
         "--downsample", type=int, default=1, help="downsample factor on all dims"
     )
     # model
@@ -156,6 +158,9 @@ def main(args):
 
         if args.diff:
             exp_name += "_difftrans"
+        
+        if args.preprocess:
+            exp_name += "_preprocess"
 
         exp_dir = os.path.join(args.result_dir, exp_name)
         if not os.path.exists(exp_dir):
@@ -171,10 +176,10 @@ def main(args):
         model = Trainer(args, mode="train")
     # init dataset
     train_dataset = NLSTDataset(
-        data_dir=args.data_dir, json_file=args.json_file, mode="train", downsample=args.downsample
+        data_dir=args.data_dir, json_file=args.json_file, mode="train", downsample=args.downsample, preprocess=args.preprocess,
     )
     val_dataset = NLSTDataset(
-        data_dir=args.data_dir, json_file=args.json_file, mode="val", downsample=args.downsample
+        data_dir=args.data_dir, json_file=args.json_file, mode="val", downsample=args.downsample, preprocess=args.preprocess,
     )
 
     # init dataloader

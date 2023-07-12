@@ -228,7 +228,7 @@ class Trainer(baseTrainer):
             # training
             train_loss_sum = 0
             train_sub_loss_sum = {l: 0.0 for l in self.loss}
-            # train_jac_det, train_tre, train_dice = [], [], []
+            train_num_foldings, train_log_jac_det_std, train_tre, train_dice = [], [], [], []
             for batch_idx, (
                 fixed_img,
                 moving_img,
@@ -262,25 +262,26 @@ class Trainer(baseTrainer):
                             D_rf = self.deblur(D_rf)
 
                         moving_reg = self.spatial_transform(
-                            moving_img, D_rf.permute(0, 2, 3, 4, 1)
+                            fixed_img, D_rf.permute(0, 2, 3, 4, 1)
                         )
                         moving_mask_reg = self.spatial_transform(
-                            moving_mask, D_rf.permute(0, 2, 3, 4, 1)
+                            fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                         )
 
                         # compute metrics
-                        #(
-                        #   batch_num_fold,
-                        #   batch_log_jac_det_std,
-                        #   batch_tre,
-                        #   batch_dice,
-                        #) = self.__compute_metrics(
-                        #   D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
-                        #)
-                        # train_jac_det.extend(batch_jac_det)
-                        # train_tre.extend(batch_tre)
-                        # train_dice.extend(batch_dice)
-
+                        (
+                           batch_num_foldings,
+                           batch_log_jac_det_std,
+                           batch_tre,
+                           batch_dice,
+                        ) = self.__compute_metrics(
+                           D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
+                           downsample=self.downsample, mode="train",
+                        )
+                        train_num_foldings.extend(batch_num_foldings)
+                        train_log_jac_det_std.extend(batch_log_jac_det_std)
+                        train_tre.extend(batch_tre)
+                        train_dice.extend(batch_dice)
                         train_loss, train_all_loss = self.__compute_loss(
                             self.loss_fn,
                             fixed_img,
@@ -311,24 +312,26 @@ class Trainer(baseTrainer):
                         D_rf = self.deblur(D_rf)
 
                     moving_reg = self.spatial_transform(
-                        moving_img, D_rf.permute(0, 2, 3, 4, 1)
+                        fixed_img, D_rf.permute(0, 2, 3, 4, 1)
                     )
                     moving_mask_reg = self.spatial_transform(
-                        moving_mask, D_rf.permute(0, 2, 3, 4, 1)
+                        fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest" 
                     )
 
                     # compute metrics
-                    #(
-                    #   batch_num_fold,
-                    #   batch_log_jac_det_std,
-                    #   batch_tre,
-                    #   batch_dice,
-                    #) = self.__compute_metrics(
-                    #   D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg
-                    #)
-                    # train_jac_det.extend(batch_jac_det)
-                    # train_tre.extend(batch_tre)
-                    # train_dice.extend(batch_dice)
+                    (
+                       batch_num_foldings,
+                       batch_log_jac_det_std,
+                       batch_tre,
+                       batch_dice,
+                    ) = self.__compute_metrics(
+                       D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
+                       downsample=self.downsample, mode="train",
+                    )
+                    train_num_foldings.extend(batch_num_foldings)
+                    train_log_jac_det_std.extend(batch_log_jac_det_std)
+                    train_tre.extend(batch_tre)
+                    train_dice.extend(batch_dice)
 
                     train_loss, train_all_loss = self.__compute_loss(
                         self.loss_fn,
@@ -372,10 +375,11 @@ class Trainer(baseTrainer):
                 for l, loss_value in train_sub_loss_sum.items()
             }
 
-            # train_jac_det_mean = np.mean(train_jac_det)
-            # train_tre_mean = np.mean(train_tre)
-            # train_dice_mean = np.mean(train_dice)
-            # print("Epoch {} - Train Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}".format(i, train_loss_mean, train_jac_det_mean, train_tre_mean, train_dice_mean))
+            train_num_foldings_mean = np.mean(train_num_foldings)
+            train_log_jac_det_std_mean = np.mean(train_log_jac_det_std)
+            train_tre_mean = np.mean(train_tre)
+            train_dice_mean = np.mean(train_dice)
+            print("Epoch {} - Train Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}".format(i, train_loss_mean, train_dice_mean, train_tre_mean, train_log_jac_det_std_mean))
             print(
                 "Epoch {} - Train Loss: {:.6f} - LR: {:.4e}".format(
                     i, train_loss_mean, self.optimizer.param_groups[0]["lr"]
@@ -392,6 +396,10 @@ class Trainer(baseTrainer):
                 )
                 for l, tlm in train_sub_loss_mean.items():
                     self.writer.add_scalar("train/{}_loss".format(l), tlm, i)
+                self.writer.add_scalar("train/Dice", train_dice_mean, i)
+                self.writer.add_scalar("train/TRE", train_tre_mean, i)
+                self.writer.add_scalar("train/num_foldings", train_num_foldings_mean, i)
+                self.writer.add_scalar("train/log_jac_det_std", train_log_jac_det_std_mean, i)
 
             # validation
             earlystop = self.__eval(i, val_loader)
@@ -463,12 +471,11 @@ class Trainer(baseTrainer):
                             D_rf = self.deblur(D_rf)
 
                         moving_reg = self.spatial_transform(
-                            moving_img, D_rf.permute(0, 2, 3, 4, 1)
+                            fixed_img, D_rf.permute(0, 2, 3, 4, 1)
                         )
                         moving_mask_reg = self.spatial_transform(
-                            moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
+                            fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                         )
-                        
                         val_loss, val_all_loss = self.__compute_loss(
                             self.loss_fn,
                             fixed_img,
@@ -497,10 +504,10 @@ class Trainer(baseTrainer):
                         D_rf = self.deblur(D_rf)
 
                     moving_reg = self.spatial_transform(
-                        moving_img, D_rf.permute(0, 2, 3, 4, 1)
+                        fixed_img, D_rf.permute(0, 2, 3, 4, 1)
                     )
                     moving_mask_reg = self.spatial_transform(
-                        moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
+                        fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                     )
                     
                     val_loss, val_all_loss = self.__compute_loss(
@@ -525,7 +532,7 @@ class Trainer(baseTrainer):
                     batch_dice,
                 ) = self.__compute_metrics(
                     D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
-                    downsample=self.downsample,
+                    downsample=self.downsample, mode="val",
                 )
                 val_num_foldings.extend(batch_num_foldings)
                 val_log_jac_det_std.extend(batch_log_jac_det_std)
@@ -560,7 +567,7 @@ class Trainer(baseTrainer):
                         rev_batch_dice,
                     ) = self.__compute_metrics(
                         D_rrf, moving_kp, fixed_kp, moving_mask, fixed_mask, fixed_mask_reg,
-                        downsample=self.downsample,
+                        downsample=self.downsample, mode="val",
                     )
                     rev_val_num_foldings.extend(rev_batch_num_foldings)
                     rev_val_log_jac_det_std.extend(rev_batch_log_jac_det_std)
@@ -686,10 +693,10 @@ class Trainer(baseTrainer):
                             D_rf = self.deblur(D_rf)
                         
                         moving_reg = self.spatial_transform(
-                            moving_img, D_rf.permute(0, 2, 3, 4, 1)
+                            fixed_img, D_rf.permute(0, 2, 3, 4, 1)
                         )
                         moving_mask_reg = self.spatial_transform(
-                            moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
+                            fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                         )
                         val_loss, val_all_loss = self.__compute_loss(
                             self.loss_fn,
@@ -718,10 +725,10 @@ class Trainer(baseTrainer):
                         D_rf = self.deblur(D_rf)
                     
                     moving_reg = self.spatial_transform(
-                        moving_img, D_rf.permute(0, 2, 3, 4, 1)
+                        fixed_img, D_rf.permute(0, 2, 3, 4, 1)
                     )
                     moving_mask_reg = self.spatial_transform(
-                        moving_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
+                        fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                     )
                     
                     val_loss, val_all_loss = self.__compute_loss(
@@ -745,7 +752,7 @@ class Trainer(baseTrainer):
                     batch_dice,
                 ) = self.__compute_metrics(
                     D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
-                    downsample=self.downsample,
+                    downsample=self.downsample, mode="val",
                 )
                 val_num_foldings.extend(batch_num_foldings)
                 val_log_jac_det_std.extend(batch_log_jac_det_std)
@@ -780,7 +787,7 @@ class Trainer(baseTrainer):
                         rev_batch_dice,
                     ) = self.__compute_metrics(
                         D_rrf, moving_kp, fixed_kp, moving_mask, fixed_mask, fixed_mask_reg,
-                        downsample=self.downsample,
+                        downsample=self.downsample, mode="val",
                     )
                     rev_val_num_foldings.extend(rev_batch_num_foldings)
                     rev_val_log_jac_det_std.extend(rev_batch_log_jac_det_std)
@@ -885,7 +892,7 @@ class Trainer(baseTrainer):
     @staticmethod
     def __compute_metrics(
         D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
-        downsample=1, use_mask='fixed',
+        downsample=1, use_mask='fixed', mode='train',
     ):
         batch_num_foldings, batch_log_jac_det_std, batch_tre, batch_dice = (
             [],
@@ -904,23 +911,26 @@ class Trainer(baseTrainer):
         # denormalize the disp (to the scale of training images)
         D_rf = ((D_rf.permute(0, 2, 3, 4, 1)) * (torch.tensor([D, H, W]).cuda()-1)).flip(-1).float()
         for subject_idx in range(len(D_rf)):
-            # jacobian determinant
-            num_foldings, log_jac_det = jacobian_determinant(
-                D_rf[subject_idx : subject_idx + 1].permute(0, 4, 1, 2, 3)
-                .clone()
-                .detach()
-                .cpu()
-                .numpy()
-            )
-            
-            if use_mask != None:
-                mask = fixed_mask if use_mask == 'fixed' else moving_mask 
-                log_jac_det_std = np.ma.MaskedArray(
-                    log_jac_det, 1-mask.squeeze().clone().detach().cpu().numpy()[2:-2, 2:-2, 2:-2]
-                ).std()
+            if mode == 'val':
+                # jacobian determinant
+                num_foldings, log_jac_det = jacobian_determinant(
+                    D_rf[subject_idx : subject_idx + 1].permute(0, 4, 1, 2, 3)
+                    .clone()
+                    .detach()
+                    .cpu()
+                    .numpy()
+                )
+                
+                if use_mask != None:
+                    mask = fixed_mask if use_mask == 'fixed' else moving_mask 
+                    log_jac_det_std = np.ma.MaskedArray(
+                        log_jac_det, 1-mask.squeeze().clone().detach().cpu().numpy()[2:-2, 2:-2, 2:-2]
+                    ).std()
+                else:
+                    log_jac_det_std = log_jac_det.std()
             else:
-                log_jac_det_std = log_jac_det.std()
-
+                num_foldings = 0
+                log_jac_det_std = 0
 
             # TRE keypoints
             tre = compute_tre(
@@ -934,7 +944,7 @@ class Trainer(baseTrainer):
                 spacing_fix=(1.5, 1.5, 1.5),
                 spacing_mov=(1.5, 1.5, 1.5),
             )  # spacing is 1.5 for NLST
-            
+           
             # Dice masks
             mean_dice, dice = compute_dice(
                 fixed=fixed_mask[subject_idx].clone().detach().cpu().numpy(),
