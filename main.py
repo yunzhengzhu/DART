@@ -26,10 +26,15 @@ def argParser():
         "--result_dir", type=str, default="./results", help="path to output directory"
     )
     parser.add_argument(
-        "--preprocess", action="store_true", default=False, help="clipping from -1000 to 500 and min-max norm")
-    parser.add_argument(
         "--downsample", type=int, default=1, help="downsample factor on all dims"
     )
+    parser.add_argument(
+        "--preprocess",
+        action="store_true",
+        default=False,
+        help="preprocess images",
+    )    
+    
     # model
     parser.add_argument("--model_type", type=str, default="LKU-Net", help="model name")
     parser.add_argument(
@@ -52,7 +57,7 @@ def argParser():
         "--loss",
         nargs="+",
         help="list of loss",
-        default=["NCC", "Smooth"],
+        default=["TRE"],
         type=str,
     )
     parser.add_argument(
@@ -77,6 +82,9 @@ def argParser():
     parser.add_argument("--lrf", type=float, default=None, help="learning rate factor")
     parser.add_argument(
         "--es", action="store_true", default=False, help="early stopping"
+    )
+    parser.add_argument(
+        "--es_criterion", type=str, default='total', help="early stopping criterion"
     )
     parser.add_argument(
         "--es_warmup", type=int, default=0, help="early stopping warmup"
@@ -123,6 +131,9 @@ def argParser():
 def main(args):
     # set seed
     set_seed(args.seed)
+
+    if args.es_criterion not in args.loss:
+        raise ValueError("Early stopping criterion not in loss!")
 
     # continue training on previous checkpoint
     if args.continue_training:
@@ -176,10 +187,10 @@ def main(args):
         model = Trainer(args, mode="train")
     # init dataset
     train_dataset = NLSTDataset(
-        data_dir=args.data_dir, json_file=args.json_file, mode="train", downsample=args.downsample, preprocess=args.preprocess,
+        data_dir=args.data_dir, json_file=args.json_file, mode="train", downsample=args.downsample, preprocess=args.preprocess
     )
     val_dataset = NLSTDataset(
-        data_dir=args.data_dir, json_file=args.json_file, mode="val", downsample=args.downsample, preprocess=args.preprocess,
+        data_dir=args.data_dir, json_file=args.json_file, mode="val", downsample=args.downsample, preprocess = args.preprocess
     )
 
     # init dataloader
