@@ -124,7 +124,6 @@ class Dice:
     """
 
     def __call__(self, y_true, y_pred):
-        y_pred = y_pred.round()
         ndims = len(list(y_pred.size())) - 2
         vol_axes = list(range(2, ndims + 2))
         top = 2 * (y_true * y_pred).sum(dim=vol_axes)
