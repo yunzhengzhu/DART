@@ -132,7 +132,7 @@ def main(args):
     # set seed
     set_seed(args.seed)
 
-    if args.es_criterion not in args.loss:
+    if args.es_criterion not in args.loss and args.es_criterion != 'total':
         raise ValueError("Early stopping criterion not in loss!")
 
     # continue training on previous checkpoint
