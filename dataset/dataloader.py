@@ -11,12 +11,13 @@ from typing import Tuple
 
 
 class NLSTDataset(Dataset):
-    def __init__(self, data_dir: str, json_file: str, mode: str = "train", downsample: int = 1, preprocess: bool = False) -> None:
+    def __init__(self, data_dir: str, json_file: str, mode: str = "train", downsample: int = 1, preprocess: bool = False, random_sample: int = 99999) -> None:
         self.data_dir = data_dir
         self.json_file = json_file
         self.mode = mode
         self.downsample = downsample
         self.preprocess = preprocess
+        self.random_sample = random_sample
 
         # read json file
         with open(os.path.join(data_dir, json_file)) as jf:
@@ -36,6 +37,7 @@ class NLSTDataset(Dataset):
             subjects = jdict["registration_val"]
         elif mode == "test":
             subjects = jdict["registration_test"]
+
         self.subjects = subjects
 
     def __len__(self) -> int:
@@ -54,6 +56,7 @@ class NLSTDataset(Dataset):
         moving_img = self.__load_nii_img(moving_img_path, preprocess=self.preprocess, downsample=self.downsample)[None, ...]
 
         # load fixed and moving keypoints
+
         fixed_kp = np.genfromtxt(
                         fixed_img_path.replace("images", "keypoints").replace("nii.gz", "csv"),
                         delimiter=",",
@@ -63,7 +66,36 @@ class NLSTDataset(Dataset):
                         moving_img_path.replace("images", "keypoints").replace("nii.gz", "csv"),
                         delimiter=",",
                     )[None, ...] #/ self.downsample
-        
+
+        if self.mode == 'train':
+            #randomly sample keypoints
+            if self.random_sample != 99999:
+                random_sample_kp = np.random.choice(fixed_kp.shape[1], self.random_sample, replace=False)
+                fixed_kp = fixed_kp[:, random_sample_kp, :]
+                moving_kp = moving_kp[:, random_sample_kp, :]
+            
+            #move moving img by x pixels and also keypoints
+            moving_img_copy = moving_img.copy()
+            moving_img = np.empty_like(moving_img_copy)
+            moving_img = np.min(moving_img_copy)
+            pos_neg_shift = np.random.choice([0,1],1)
+            shift_pix = 10
+            if pos_neg_shift:
+                moving_img[shift_pix:, :, :] = moving_img_copy[:-shift_pix, :, :]
+                moving_kp[:, :, 2] =  moving_kp [:, :, 2] + 10
+            else:
+                moving_img[:shift_pix, :, :] = moving_img_copy[-shift_pix:, :, :]
+                moving_kp[:, :, 2] =  moving_kp [:, :, 2] - 10
+            
+
+
+
+
+
+            moving_kp = moving_kp[:,:,]
+
+            
+
         # load masks
         fixed_mask = self.__load_nii_img(
             fixed_img_path.replace("images", "masks"), preprocess=False, downsample=self.downsample
@@ -71,6 +103,10 @@ class NLSTDataset(Dataset):
         moving_mask = self.__load_nii_img(
             moving_img_path.replace("images", "masks"), preprocess=False, downsample=self.downsample
         )[None, ...]
+
+        # mask
+        #fixed_img[~fixed_mask.astype(bool)] = fixed_img.min()
+        #moving_img[~moving_mask.astype(bool)] = moving_img.min()
 
         return fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask
 

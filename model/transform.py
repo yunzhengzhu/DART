@@ -81,9 +81,8 @@ class DiffeomorphicTransform(nn.Module):
         return flow
 
 class ResizeTransform(nn.Module):
-
     def __init__(self, factor=1):
-        super(ResizeTransform).__init__()
+        super(ResizeTransform, self).__init__()
         self.factor = factor
 
     def forward(self, x):

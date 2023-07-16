@@ -34,7 +34,9 @@ def argParser():
         default=False,
         help="preprocess images",
     )    
-    
+    parser.add_argument(
+        "--random_sample", type=int, default=99999, help="# of randomly sampled kp"
+    )  
     # model
     parser.add_argument("--model_type", type=str, default="LKU-Net", help="model name")
     parser.add_argument(
@@ -172,6 +174,9 @@ def main(args):
         
         if args.preprocess:
             exp_name += "_preprocess"
+        
+        if args.random_sample != 99999:
+            exp_name += f'_rs{args.random_sample}'
 
         exp_dir = os.path.join(args.result_dir, exp_name)
         if not os.path.exists(exp_dir):
@@ -187,10 +192,10 @@ def main(args):
         model = Trainer(args, mode="train")
     # init dataset
     train_dataset = NLSTDataset(
-        data_dir=args.data_dir, json_file=args.json_file, mode="train", downsample=args.downsample, preprocess=args.preprocess
+        data_dir=args.data_dir, json_file=args.json_file, mode="train", downsample=args.downsample, preprocess=args.preprocess, random_sample=args.random_sample
     )
     val_dataset = NLSTDataset(
-        data_dir=args.data_dir, json_file=args.json_file, mode="val", downsample=args.downsample, preprocess = args.preprocess
+        data_dir=args.data_dir, json_file=args.json_file, mode="val", downsample=args.downsample, preprocess = args.preprocess, random_sample=args.random_sample
     )
 
     # init dataloader
