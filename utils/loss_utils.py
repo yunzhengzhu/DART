@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 import math
-
+from utils.feature_utils import mindssc
 """
 Adopted from https://github.com/xi-jia/LKU-Net/blob/main/train.py
 """
@@ -168,3 +168,11 @@ class TRE:
 
         pred_lmsdiff = F.grid_sample(disp, fix_lms.view(1, -1, 1, 1, 3), align_corners=True, mode='bilinear').squeeze().t()
         return torch.nn.MSELoss()(pred_lmsdiff, gt_lmdiff)
+
+
+class MINDSSC:
+    """
+    MIND loss.
+    """
+    def __call__(self, x, y):
+        return torch.mean((mindssc(x) - mindssc(y)) ** 2)

@@ -46,6 +46,7 @@ class NLSTDataset(Dataset):
         # image size (224,192,224) -> (1,224,192,224)
         fixed_relative_path = os.path.normpath(self.subjects[idx]["fixed"])
         moving_relative_path = os.path.normpath(self.subjects[idx]["moving"])
+        file_id = fixed_relative_path.split("_")[1]
 
         fixed_img_path = os.path.join(self.data_dir, fixed_relative_path)
         moving_img_path = os.path.join(self.data_dir, moving_relative_path)

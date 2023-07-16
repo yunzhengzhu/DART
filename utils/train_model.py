@@ -16,6 +16,7 @@ from model.transform import SpatialTransform, DiffeomorphicTransform, ResizeTran
 from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE
 from utils.train_utils import EarlyStopping
 from utils.metric_utils import jacobian_determinant, compute_tre, compute_dice
+from utils.feature_utils import mindssc
 from tensorboardX import SummaryWriter
 
 
@@ -44,12 +45,13 @@ class baseTrainer:
         self.exp_dir = args.exp_dir
         self.log = args.log
         self.print_every = args.print_every
-        self.diff = args.diff
+        self.diff = args.diff if mode == "train" else args.eval_diff
         self.freeze = args.freeze
         self.pretrained = args.pretrained if mode == "train" else None
         self.rev_metric = args.rev_metric
-        self.blur_factor = args.blur_factor
+        self.blur_factor = args.blur_factor if mode == "train" else args.eval_blur_factor
         self.es_criterion = args.es_criterion
+        self.mind_feature = args.mind_feature
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
@@ -135,16 +137,18 @@ class baseTrainer:
 
     def __init_model(self):
         print(f"Initiate {self.model_type} model", end=" ")
+        in_channel = 24 if self.mind_feature else 2
+            
         if self.model_type == "LKU-Net":
             self.model = LKUNet(
-                in_channel=2, n_classes=3, start_channel=self.start_channel, layer_type='lku'
+                in_channel=in_channel, n_classes=3, start_channel=self.start_channel, layer_type='lku'
             )
             print(self.model)
         elif self.model_type == "ResUNet":
-            self.model = ResUNetReg()
+            self.model = ResUNetReg(in_channel=in_channel, n_classes=3, kernel='regular')
             print(self.model)
         elif self.model_type == "UNet":
-            self.model = UNetReg(kernel='regular')
+            self.model = UNetReg(in_channel=in_channel, n_classes=3, kernel='large', lknorm='instancenorm')
             print(self.model)
         else:
             raise NotImplementedError
@@ -165,6 +169,13 @@ class baseTrainer:
         self.spatial_transform = SpatialTransform()
         if self.diff:
             self.diff_transform = DiffeomorphicTransform()
+        
+        if self.blur_factor:
+            self.blur = ResizeTransform(factor=1/self.blur_factor)
+            self.deblur = ResizeTransform(factor=self.blur_factor)
+        else:
+            self.blur = None
+            self.deblur = None
 
         for param in self.spatial_transform.parameters():
             param.requires_grad = False
@@ -176,11 +187,8 @@ class baseTrainer:
             self.diff_transform.to(self.device)
 
         if self.blur_factor:
-            self.blur = ResizeTransform(factor=1/self.blur_factor)
-            self.deblur = ResizeTransform(factor=self.blur_factor)
-        else:
-            self.blur = None
-            self.deblur = None
+            self.blur.to(self.device)
+            self.deblur.to(self.device)
 
     def __init_logger(self):
         if self.log:
@@ -216,6 +224,7 @@ class Trainer(baseTrainer):
         self.ckpt_path = os.path.join(args.exp_dir, "checkpoint.pth.tar")
         self.es_ckpt_path = os.path.join(args.exp_dir, "es_checkpoint.pth.tar")
         self.save_df = args.save_df
+        self.save_warped = args.save_warped
     
     def train(
         self,
@@ -247,6 +256,11 @@ class Trainer(baseTrainer):
                 fixed_mask, moving_mask = fixed_mask.float().to(
                     self.device
                 ), moving_mask.float().to(self.device)
+
+                # mind feature
+                if self.mind_feature:
+                    fixed_img = mindssc(fixed_img)
+                    moving_img = mindssc(moving_img)
 
                 if self.scaler:
                     with torch.cuda.amp.autocast():
@@ -455,11 +469,15 @@ class Trainer(baseTrainer):
                     self.device
                 ), moving_mask.float().to(self.device)
                 
+                # mind feature
+                if self.mind_feature:
+                    fixed_img = mindssc(fixed_img)
+                    moving_img = mindssc(moving_img)
+                
                 if self.scaler:
                     with torch.cuda.amp.autocast():
                         # pass data to model
                         rf = self.model(fixed_img, moving_img)
-                        
                         if self.blur:
                             rf = self.blur(rf)
 
@@ -542,6 +560,7 @@ class Trainer(baseTrainer):
                 
                 if self.rev_metric:
                     rrf = -rf
+                    rrf = rrf.to(torch.float32)
                     if self.blur:
                         rrf = self.blur(rrf)
 
@@ -554,10 +573,10 @@ class Trainer(baseTrainer):
                         D_rf = self.deblur(D_rf)
 
                     fixed_reg = self.spatial_transform(
-                        fixed_img, D_rrf.permute(0, 2, 3, 4, 1)
+                        moving_img, D_rrf.permute(0, 2, 3, 4, 1)
                     )
                     fixed_mask_reg = self.spatial_transform(
-                        fixed_mask, D_rrf.permute(0, 2, 3, 4, 1), mod="nearest"
+                        moving_mask, D_rrf.permute(0, 2, 3, 4, 1), mod="nearest"
                     )
                     
                     # compute metrics from reverse direction
@@ -686,6 +705,11 @@ class Trainer(baseTrainer):
                     self.device
                 ), moving_mask.float().to(self.device)
 
+                # mind feature
+                if self.mind_feature:
+                    fixed_img = mindssc(fixed_img)
+                    moving_img = mindssc(moving_img)
+                
                 if self.scaler:
                     with torch.cuda.amp.autocast():
                         # pass data to model
@@ -770,6 +794,7 @@ class Trainer(baseTrainer):
                 
                 if self.rev_metric:
                     rrf = -rf
+                    rrf = rrf.to(torch.float32)
                     if self.blur:
                         rrf = self.blur(rrf)
 
@@ -782,10 +807,10 @@ class Trainer(baseTrainer):
                         D_rrf = self.deblur(D_rrf)
 
                     fixed_reg = self.spatial_transform(
-                        fixed_img, D_rrf.permute(0, 2, 3, 4, 1)
+                        moving_img, D_rrf.permute(0, 2, 3, 4, 1)
                     )
                     fixed_mask_reg = self.spatial_transform(
-                        fixed_mask, D_rrf.permute(0, 2, 3, 4, 1), mod="nearest"
+                        moving_mask, D_rrf.permute(0, 2, 3, 4, 1), mod="nearest"
                     )
                     
                     # compute metrics from reverse direction
@@ -808,9 +833,12 @@ class Trainer(baseTrainer):
                     val_sub_loss_sum[l] = loss_value + val_all_loss[l]
 
                 # save displacement field - need to double check with learn2reg
-                if self.save_df:
+                if self.save_df or self.save_warped:
                     os.makedirs(
                         os.path.join(self.exp_dir, "displacement_field"), exist_ok=True
+                    )
+                    os.makedirs(
+                        os.path.join(self.exp_dir, "warped_results"), exist_ok=True
                     )
                     for iidx, subject in enumerate(
                         val_loader.dataset.subjects[
@@ -824,13 +852,26 @@ class Trainer(baseTrainer):
                         D= val_loader.dataset.D // self.downsample
 
                         subject_id = subject["moving"].split("/")[-1].split("_")[1]
-                        if self.downsample > 1:
-                            D_rf = F.interpolate(D_rf,scale_factor=self.downsample,mode='trilinear')
-                        D_rf=((D_rf.permute(0,2,3,4,1))*(torch.tensor([D,W,H]).cuda()-1)).flip(-1).float().squeeze().cpu()
-                        nib.save(nib.Nifti1Image(D_rf.numpy(), np.eye(4)), 
-                                 os.path.join(self.exp_dir,"displacement_field", 
-                                              f'disp_{str(subject_id).zfill(4)}_{str(subject_id).zfill(4)}.nii.gz'))
-            
+                        if self.save_df:
+                            if self.downsample > 1:
+                                D_rf = F.interpolate(D_rf,scale_factor=self.downsample,mode='trilinear')
+                            D_rf=((D_rf.permute(0,2,3,4,1))*(torch.tensor([D,W,H]).cuda()-1)).flip(-1).float().squeeze().cpu()
+                            nib.save(nib.Nifti1Image(D_rf.numpy(), np.eye(4)), 
+                                     os.path.join(self.exp_dir,"displacement_field", 
+                                                  f'disp_{str(subject_id).zfill(4)}_{str(subject_id).zfill(4)}.nii.gz'))
+                        if self.save_warped: 
+                            if self.downsample > 1:
+                                moving_reg = F.interpolate(moving_reg,scale_factor=self.downsample,mode='trilinear')
+                            moving_reg = moving_reg.squeeze().cpu()
+                            # denormalize warped
+                            moving_reg = (moving_reg * (500 - (-1000)) + (-1000)).to(torch.int16)
+                            aff = np.eye(4) * 1.5
+                            aff[3, 3] = 1.0
+                            #aff = np.eye(4)
+                            nib.save(nib.Nifti1Image(moving_reg.numpy(), aff),
+                                    os.path.join(self.exp_dir,"warped_results",
+                                                 f'warped_{str(subject_id).zfill(4)}_{str(subject_id).zfill(4)}.nii.gz'))
+
 
         val_loss_mean = val_loss_sum / len(val_loader)
         val_sub_loss_mean = {
