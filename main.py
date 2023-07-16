@@ -26,7 +26,10 @@ def argParser():
         "--result_dir", type=str, default="./results", help="path to output directory"
     )
     parser.add_argument(
-        "--exp_name", type=str, default=None, help="customize save name",
+        "--exp_name",
+        type=str,
+        default=None,
+        help="customize save name",
     )
     parser.add_argument(
         "--downsample", type=int, default=1, help="downsample factor on all dims"
@@ -36,14 +39,17 @@ def argParser():
         action="store_true",
         default=False,
         help="preprocess images",
-    )    
+    )
     parser.add_argument(
         "--random_sample", type=int, default=99999, help="# of randomly sampled kp"
-    )  
+    )
 
     # feature extraction
     parser.add_argument(
-        "--mind_feature", action="store_true", default=False, help="extract mind features for img"
+        "--mind_feature",
+        action="store_true",
+        default=False,
+        help="extract mind features for img",
     )
 
     # model
@@ -51,13 +57,12 @@ def argParser():
     parser.add_argument(
         "--start_channel", type=int, default=8, help="start channel U-Net"
     )
-    parser.add_argument(
-        "--blur_factor", type=int, default=None, help="disp blurring")
+    parser.add_argument("--blur_factor", type=int, default=None, help="disp blurring")
     parser.add_argument(
         "--diff", action="store_true", default=False, help="use DiffeomorphicTransform"
     )
     parser.add_argument(
-        "--pretrained",type=str, default=None, help="path to pretrained model"
+        "--pretrained", type=str, default=None, help="path to pretrained model"
     )
     parser.add_argument(
         "--freeze", type=str, default=None, help="freezing module in network"
@@ -81,7 +86,9 @@ def argParser():
     parser.add_argument("--opt", type=str, default="adam", help="optimizer")
     parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
     parser.add_argument("--sche", type=str, default=None, help="scheduler")
-    parser.add_argument("--use_scaler", action="store_true", default=False, help="use gradient scaler")
+    parser.add_argument(
+        "--use_scaler", action="store_true", default=False, help="use gradient scaler"
+    )
     parser.add_argument("--batch_size", type=int, default=1, help="batch size")
     parser.add_argument("--epochs", type=int, default=100, help="number of epochs")
     parser.add_argument(
@@ -95,7 +102,7 @@ def argParser():
         "--es", action="store_true", default=False, help="early stopping"
     )
     parser.add_argument(
-        "--es_criterion", type=str, default='total', help="early stopping criterion"
+        "--es_criterion", type=str, default="total", help="early stopping criterion"
     )
     parser.add_argument(
         "--es_warmup", type=int, default=0, help="early stopping warmup"
@@ -149,7 +156,7 @@ def main(args):
     # set seed
     set_seed(args.seed)
 
-    if args.es_criterion not in args.loss and args.es_criterion != 'total':
+    if args.es_criterion not in args.loss and args.es_criterion != "total":
         raise ValueError("Early stopping criterion not in loss!")
 
     # continue training on previous checkpoint
@@ -170,14 +177,14 @@ def main(args):
 
     else:
         # create experiment folder
-        if args.exp_name != None:
+        if args.exp_name is not None:
             exp_name = args.exp_name
         else:
             if args.sche:
                 exp_name = f"{args.model_type}_{args.start_channel}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_sche{args.sche}_lrf{args.lrf}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}"
             else:
                 exp_name = f"{args.model_type}_{args.start_channel}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}"
-            
+
             if args.freeze:
                 exp_name += f"_freeze{args.freeze}"
 
@@ -187,17 +194,17 @@ def main(args):
             if args.blur_factor:
                 exp_name += f"_blur{args.blur_factor}"
 
-        if args.diff:
-            exp_name += "_difftrans"
-        
-        if args.preprocess:
-            exp_name += "_preprocess"
+            if args.diff:
+                exp_name += "_difftrans"
 
-        if args.mind_feature:
-            exp_name += "_usemind"
+            if args.preprocess:
+                exp_name += "_preprocess"
 
-        if args.random_sample != 99999:
-            exp_name += f'_rs{args.random_sample}'
+            if args.mind_feature:
+                exp_name += "_usemind"
+
+            if args.random_sample != 99999:
+                exp_name += f"_rs{args.random_sample}"
 
         exp_dir = os.path.join(args.result_dir, exp_name)
         if not os.path.exists(exp_dir):
@@ -213,10 +220,20 @@ def main(args):
         model = Trainer(args, mode="train")
     # init dataset
     train_dataset = NLSTDataset(
-        data_dir=args.data_dir, json_file=args.json_file, mode="train", downsample=args.downsample, preprocess=args.preprocess, random_sample=args.random_sample
+        data_dir=args.data_dir,
+        json_file=args.json_file,
+        mode="train",
+        downsample=args.downsample,
+        preprocess=args.preprocess,
+        random_sample=args.random_sample,
     )
     val_dataset = NLSTDataset(
-        data_dir=args.data_dir, json_file=args.json_file, mode="val", downsample=args.downsample, preprocess = args.preprocess, random_sample=args.random_sample
+        data_dir=args.data_dir,
+        json_file=args.json_file,
+        mode="val",
+        downsample=args.downsample,
+        preprocess=args.preprocess,
+        random_sample=args.random_sample,
     )
 
     # init dataloader
