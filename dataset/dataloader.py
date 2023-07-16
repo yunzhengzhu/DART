@@ -74,28 +74,6 @@ class NLSTDataset(Dataset):
                 random_sample_kp = np.random.choice(fixed_kp.shape[1], self.random_sample, replace=False)
                 fixed_kp = fixed_kp[:, random_sample_kp, :]
                 moving_kp = moving_kp[:, random_sample_kp, :]
-            
-            #move moving img by x pixels and also keypoints
-            moving_img_copy = moving_img.copy()
-            moving_img = np.empty_like(moving_img_copy)
-            moving_img = np.min(moving_img_copy)
-            pos_neg_shift = np.random.choice([0,1],1)
-            shift_pix = 10
-            if pos_neg_shift:
-                moving_img[shift_pix:, :, :] = moving_img_copy[:-shift_pix, :, :]
-                moving_kp[:, :, 2] =  moving_kp [:, :, 2] + 10
-            else:
-                moving_img[:shift_pix, :, :] = moving_img_copy[-shift_pix:, :, :]
-                moving_kp[:, :, 2] =  moving_kp [:, :, 2] - 10
-            
-
-
-
-
-
-            moving_kp = moving_kp[:,:,]
-
-            
 
         # load masks
         fixed_mask = self.__load_nii_img(
