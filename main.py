@@ -41,7 +41,7 @@ def argParser():
         help="preprocess images",
     )
     parser.add_argument(
-        "--random_sample", type=int, default=99999, help="# of randomly sampled kp"
+        "--random_sample", type=int, default=None, help="# of randomly sampled kp"
     )
 
     # feature extraction
@@ -203,7 +203,7 @@ def main(args):
             if args.mind_feature:
                 exp_name += "_usemind"
 
-            if args.random_sample != 99999:
+            if args.random_sample:
                 exp_name += f"_rs{args.random_sample}"
 
         exp_dir = os.path.join(args.result_dir, exp_name)

@@ -70,7 +70,7 @@ class NLSTDataset(Dataset):
 
         if self.mode == 'train':
             #randomly sample keypoints
-            if self.random_sample != 99999:
+            if self.random_sample:
                 random_sample_kp = np.random.choice(fixed_kp.shape[1], self.random_sample, replace=False)
                 fixed_kp = fixed_kp[:, random_sample_kp, :]
                 moving_kp = moving_kp[:, random_sample_kp, :]
