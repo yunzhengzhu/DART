@@ -5,10 +5,16 @@ import torch.nn.functional as F
 class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super().__init__()
-        self.conv1 = nn.Sequential(nn.Conv3d(in_channels,out_channels,3,padding=1,bias=False),\
-                                   nn.InstanceNorm3d(out_channels),nn.ReLU(inplace=True))
-        self.conv2 = nn.Sequential(nn.Conv3d(out_channels,out_channels,1,bias=False),\
-                                   nn.InstanceNorm3d(out_channels),nn.ReLU(inplace=True))
+        self.conv1 = nn.Sequential(
+                nn.Conv3d(in_channels,out_channels,3,padding=1,bias=False),\
+                nn.InstanceNorm3d(out_channels),
+                nn.ReLU(inplace=True)
+        )
+        self.conv2 = nn.Sequential(
+                nn.Conv3d(out_channels,out_channels,1,bias=False),\
+                nn.InstanceNorm3d(out_channels),
+                nn.ReLU(inplace=True)
+        )
 
     def forward(self, x):
         x = self.conv1(x)
@@ -126,7 +132,7 @@ class LK_encoder(nn.Module):
         return self.layer_nonlinearity(outputs)
 
 class UNet(nn.Module):
-    def __init__(self, kernel='regular'):
+    def __init__(self, in_channel=2, n_classes=3, kernel='regular', lknorm='batchnorm'):
         '''
         kernel: large for lkunet, regular for unet
         '''
@@ -134,33 +140,42 @@ class UNet(nn.Module):
         self.kernel = kernel
         channel_factor = 1
         if kernel == 'regular':
-            self.encoder = nn.ModuleDict({'enc1':ConvBlock(2,32//channel_factor),\
-                                          'enc2':ConvBlock(32//channel_factor,48//channel_factor),\
-                                          'enc3':ConvBlock(48//channel_factor,48//channel_factor),\
-                                          'enc4':ConvBlock(48//channel_factor,64//channel_factor),\
-                                          'enc5':ConvBlock(64//channel_factor,80//channel_factor)}) #,\
+            #self.encoder = nn.ModuleDict({'enc1':ConvBlock(2,32//channel_factor),\
+            #                              'enc2':ConvBlock(32//channel_factor,48//channel_factor),\
+            #                              'enc3':ConvBlock(48//channel_factor,48//channel_factor),\
+            #                              'enc4':ConvBlock(48//channel_factor,64//channel_factor),\
+            #                              'enc5':ConvBlock(64//channel_factor,80//channel_factor)}) #,\
+            self.encoder = nn.ModuleDict({'enc1':ConvBlock(in_channel,32//channel_factor),\
+                                          'enc2':ConvBlock(32//channel_factor,64//channel_factor),\
+                                          'enc3':ConvBlock(64//channel_factor,128//channel_factor),\
+                                          'enc4':ConvBlock(128//channel_factor,256//channel_factor),\
+                                          'enc5':ConvBlock(256//channel_factor,512//channel_factor)}) #,\
                                           #'enc6':ConvBlock(64//channel_factor,80//channel_factor)})
                                          #'dec1':ConvBlock(80//channel_factor+64//channel_factor,64//channel_factor),\
         elif kernel == 'large':
-            bias_opt = True
-            self.encoder = nn.ModuleDict({'enc1':ConvBlock(2,32//channel_factor),\
-                                           'enc2':ConvBlock(32//channel_factor,48//channel_factor),\
-                                           'enc3':LK_encoder(48//channel_factor,48//channel_factor,norm='batchnorm',bias=bias_opt),\
-                                           'enc4':ConvBlock(48//channel_factor,48//channel_factor),\
-                                           'enc5':LK_encoder(48//channel_factor,48//channel_factor,norm='batchnorm',bias=bias_opt),\
-                                           'enc6':ConvBlock(48//channel_factor,64//channel_factor),\
-                                           'enc7':LK_encoder(64//channel_factor,64//channel_factor,norm='batchnorm',bias=bias_opt),\
-                                           'enc8':ConvBlock(64//channel_factor,80//channel_factor),\
-                                           'enc9':LK_encoder(80//channel_factor,80//channel_factor,norm='batchnorm',bias=bias_opt)})
+            bias_opt = False
+            self.encoder = nn.ModuleDict({'enc1':ConvBlock(in_channel,32//channel_factor),\
+                                           'enc2':ConvBlock(32//channel_factor,64//channel_factor),\
+                                           'enc3':LK_encoder(64//channel_factor,64//channel_factor,norm=lknorm,bias=bias_opt),\
+                                           'enc4':ConvBlock(64//channel_factor,128//channel_factor),\
+                                           'enc5':LK_encoder(128//channel_factor,128//channel_factor,norm=lknorm,bias=bias_opt),\
+                                           'enc6':ConvBlock(128//channel_factor,256//channel_factor),\
+                                           'enc7':LK_encoder(256//channel_factor,256//channel_factor,norm=lknorm,bias=bias_opt),\
+                                           'enc8':ConvBlock(256//channel_factor,512//channel_factor),\
+                                           'enc9':LK_encoder(512//channel_factor,512//channel_factor,norm=lknorm,bias=bias_opt)})
 
-        self.decoder = nn.ModuleDict({'dec1':ConvBlock(80//channel_factor+64//channel_factor,64//channel_factor),\
-                                      'dec2':ConvBlock(64//channel_factor+48//channel_factor,48//channel_factor),\
-                                      'dec3':ConvBlock(48//channel_factor+48//channel_factor,48//channel_factor),\
-                                      'dec4':ConvBlock(48//channel_factor+32//channel_factor,32//channel_factor)})
+        #self.decoder = nn.ModuleDict({'dec1':ConvBlock(80//channel_factor+64//channel_factor,64//channel_factor),\
+        #                              'dec2':ConvBlock(64//channel_factor+48//channel_factor,48//channel_factor),\
+        #                              'dec3':ConvBlock(48//channel_factor+48//channel_factor,48//channel_factor),\
+        #                              'dec4':ConvBlock(48//channel_factor+32//channel_factor,32//channel_factor)})
+        self.decoder = nn.ModuleDict({'dec1':ConvBlock(512//channel_factor+256//channel_factor,256//channel_factor),\
+                                      'dec2':ConvBlock(256//channel_factor+128//channel_factor,128//channel_factor),\
+                                      'dec3':ConvBlock(128//channel_factor+64//channel_factor,64//channel_factor),\
+                                      'dec4':ConvBlock(64//channel_factor+32//channel_factor,32//channel_factor)})
         self.conv1 = ConvBlock(32//channel_factor,64//channel_factor)
         self.conv2 = nn.Sequential(nn.Conv3d(64//channel_factor,32//channel_factor,1,bias=False),nn.InstanceNorm3d(32//channel_factor),nn.ReLU(inplace=True),\
                                  nn.Conv3d(32//channel_factor,32//channel_factor,1,bias=False),nn.InstanceNorm3d(32//channel_factor),nn.ReLU(inplace=True),\
-                                 nn.Conv3d(32//channel_factor,3,1))
+                                 nn.Conv3d(32//channel_factor,n_classes,1))
     def forward(self, x):
         y = []
         upsample = nn.Upsample(scale_factor=2,mode='trilinear')
@@ -204,9 +219,12 @@ class UNet(nn.Module):
 
 
 class UNetReg(nn.Module):
-    def __init__(self, kernel='regular'):
+    def __init__(self, in_channel=2, n_classes=3, kernel='regular', lknorm='batchnorm'):
         super().__init__()
-        self.unet = UNet(kernel=kernel)
+        self.unet = UNet(in_channel=in_channel,
+                         n_classes=n_classes,
+                         kernel=kernel, 
+                         lknorm=lknorm)
 
     def forward(self, x, y):
         input = torch.cat((x.to(torch.float), y.to(torch.float)), 1)

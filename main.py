@@ -26,6 +26,9 @@ def argParser():
         "--result_dir", type=str, default="./results", help="path to output directory"
     )
     parser.add_argument(
+        "--exp_name", type=str, default=None, help="customize save name",
+    )
+    parser.add_argument(
         "--downsample", type=int, default=1, help="downsample factor on all dims"
     )
     parser.add_argument(
@@ -37,6 +40,12 @@ def argParser():
     parser.add_argument(
         "--random_sample", type=int, default=99999, help="# of randomly sampled kp"
     )  
+
+    # feature extraction
+    parser.add_argument(
+        "--mind_feature", action="store_true", default=False, help="extract mind features for img"
+    )
+
     # model
     parser.add_argument("--model_type", type=str, default="LKU-Net", help="model name")
     parser.add_argument(
@@ -107,6 +116,12 @@ def argParser():
         default=False,
         help="save displacement field",
     )
+    parser.add_argument(
+        "--save_warped",
+        action="store_true",
+        default=False,
+        help="save warped image",
+    )
 
     # validation
     parser.add_argument(
@@ -155,26 +170,32 @@ def main(args):
 
     else:
         # create experiment folder
-        if args.sche:
-            exp_name = f"{args.model_type}_{args.start_channel}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_sche{args.sche}_lrf{args.lrf}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}"
+        if args.exp_name != None:
+            exp_name = args.exp_name
         else:
-            exp_name = f"{args.model_type}_{args.start_channel}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}"
-        
-        if args.freeze:
-            exp_name += f"_freeze{args.freeze}"
+            if args.sche:
+                exp_name = f"{args.model_type}_{args.start_channel}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_sche{args.sche}_lrf{args.lrf}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}"
+            else:
+                exp_name = f"{args.model_type}_{args.start_channel}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}"
+            
+            if args.freeze:
+                exp_name += f"_freeze{args.freeze}"
 
-        if args.use_scaler:
-            exp_name += "_scaler"
+            if args.use_scaler:
+                exp_name += "_scaler"
 
-        if args.blur_factor:
-            exp_name += f"_blur{args.blur_factor}"
+            if args.blur_factor:
+                exp_name += f"_blur{args.blur_factor}"
 
         if args.diff:
             exp_name += "_difftrans"
         
         if args.preprocess:
             exp_name += "_preprocess"
-        
+
+        if args.mind_feature:
+            exp_name += "_usemind"
+
         if args.random_sample != 99999:
             exp_name += f'_rs{args.random_sample}'
 

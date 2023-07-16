@@ -23,6 +23,24 @@ def argParser():
         default=False,
         help="save displacement field",
     )
+    parser.add_argument(
+        "--save_warped",
+        action="store_true",
+        default=False,
+        help="save warped image",
+    )
+    parser.add_argument(
+        "--eval_diff",
+        action="store_true",
+        default=False,
+        help="evaluation with diffeomorphism",
+    )
+    parser.add_argument(
+        "--eval_blur_factor",
+        type=int,
+        default=None,
+        help="evaluation with blurring",
+    )
     args = parser.parse_args()
     return args
 
