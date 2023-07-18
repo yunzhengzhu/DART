@@ -13,7 +13,7 @@ from model.lkunet import LKUNet
 from model.resunet import ResUNetReg
 from model.unet import UNetReg
 from model.transform import SpatialTransform, DiffeomorphicTransform, ResizeTransform
-from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE
+from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE, MINDSSC
 from utils.train_utils import EarlyStopping
 from utils.metric_utils import jacobian_determinant, compute_tre, compute_dice
 from utils.feature_utils import mindssc
@@ -52,6 +52,7 @@ class baseTrainer:
         self.blur_factor = args.blur_factor if mode == "train" else args.eval_blur_factor
         self.es_criterion = args.es_criterion
         self.mind_feature = args.mind_feature
+        self.wd = args.wd
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
@@ -75,9 +76,9 @@ class baseTrainer:
         print(f"Initiate {self.opt} optimizer", end=" ")
 
         if self.opt == "adam":
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, weight_decay = self.wd)
         elif self.opt == "sgd":
-            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr)
+            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr, weight_decay = self.wd)
         else:
             raise NotImplementedError
 
@@ -131,6 +132,8 @@ class baseTrainer:
                 self.loss_fn[l] = [SAD(), lw]
             elif l == "TRE":
                 self.loss_fn[l] = [TRE(), lw]
+            elif l == "MINDSSC":
+                self.loss_fn[l] = [MINDSSC(), lw]
             else:
                 raise NotImplementedError
         print("...done")
@@ -1057,6 +1060,10 @@ class Trainer(baseTrainer):
                 ) * lw[1]
                 loss += tre_loss
                 all_loss["TRE"] = tre_loss.item()
+            elif l == "MINDSSC":
+                mindssc_loss = lw[0](fixed_img, moving_reg) * lw[1]
+                loss += mindssc_loss
+                all_loss["MINDSSC"] = mindssc_loss.item()
 
         return loss, all_loss
 

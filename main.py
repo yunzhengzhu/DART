@@ -43,7 +43,9 @@ def argParser():
     parser.add_argument(
         "--random_sample", type=int, default=None, help="# of randomly sampled kp"
     )
-
+    parser.add_argument(
+        "--affine_aug", action="store_true", default=False, help="affine augmentation on images"
+    )
     # feature extraction
     parser.add_argument(
         "--mind_feature",
@@ -85,6 +87,7 @@ def argParser():
     )
     parser.add_argument("--opt", type=str, default="adam", help="optimizer")
     parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
+    parser.add_argument("--wd", type=float, default=1e-3, help="weight decay (L2 regularization)")
     parser.add_argument("--sche", type=str, default=None, help="scheduler")
     parser.add_argument(
         "--use_scaler", action="store_true", default=False, help="use gradient scaler"
@@ -181,9 +184,9 @@ def main(args):
             exp_name = args.exp_name
         else:
             if args.sche:
-                exp_name = f"{args.model_type}_{args.start_channel}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_sche{args.sche}_lrf{args.lrf}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}"
+                exp_name = f"{args.model_type}_{args.start_channel}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_sche{args.sche}_lrf{args.lrf}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}_wd{args.wd}"
             else:
-                exp_name = f"{args.model_type}_{args.start_channel}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}"
+                exp_name = f"{args.model_type}_{args.start_channel}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}_wd{args.wd}"
 
             if args.freeze:
                 exp_name += f"_freeze{args.freeze}"
@@ -206,6 +209,9 @@ def main(args):
             if args.random_sample:
                 exp_name += f"_rs{args.random_sample}"
 
+            if args.pretrained:
+                exp_name += f"_pretrained"
+
         exp_dir = os.path.join(args.result_dir, exp_name)
         if not os.path.exists(exp_dir):
             os.makedirs(exp_dir)
@@ -226,6 +232,7 @@ def main(args):
         downsample=args.downsample,
         preprocess=args.preprocess,
         random_sample=args.random_sample,
+        affine_aug=args.affine_aug,
     )
     val_dataset = NLSTDataset(
         data_dir=args.data_dir,
@@ -234,6 +241,7 @@ def main(args):
         downsample=args.downsample,
         preprocess=args.preprocess,
         random_sample=args.random_sample,
+        affine_aug=args.affine_aug,
     )
 
     # init dataloader
