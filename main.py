@@ -44,7 +44,10 @@ def argParser():
         "--random_sample", type=int, default=None, help="# of randomly sampled kp"
     )
     parser.add_argument(
-        "--affine_aug", action="store_true", default=False, help="affine augmentation on images"
+        "--affine_aug",
+        action="store_true",
+        default=False,
+        help="affine augmentation on images",
     )
     # feature extraction
     parser.add_argument(
@@ -87,7 +90,9 @@ def argParser():
     )
     parser.add_argument("--opt", type=str, default="adam", help="optimizer")
     parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
-    parser.add_argument("--wd", type=float, default=1e-3, help="weight decay (L2 regularization)")
+    parser.add_argument(
+        "--wd", type=float, default=1e-3, help="weight decay (L2 regularization)"
+    )
     parser.add_argument("--sche", type=str, default=None, help="scheduler")
     parser.add_argument(
         "--use_scaler", action="store_true", default=False, help="use gradient scaler"

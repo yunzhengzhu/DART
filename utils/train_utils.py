@@ -6,6 +6,7 @@ import pandas as pd
 import random
 import os
 
+
 def initialize_weights(module):
     for m in module.modules():
         if isinstance(m, nn.BatchNorm3d):

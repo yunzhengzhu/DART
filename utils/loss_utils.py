@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import numpy as np
 import math
 from utils.feature_utils import mindssc
+
 """
 Adopted from https://github.com/xi-jia/LKU-Net/blob/main/train.py
 """
@@ -50,7 +51,7 @@ class NCC(torch.nn.Module):
         I2 = I * I
         J2 = J * J
         IJ = I * J
-        
+
         # compute filters
         # compute local sums via convolution
         I_sum = conv_fn(I, weight, padding=int(win_size / 2))
@@ -67,7 +68,7 @@ class NCC(torch.nn.Module):
         cross = IJ_sum - u_J * I_sum - u_I * J_sum + u_I * u_J * win_size
         I_var = I2_sum - 2 * u_I * I_sum + u_I * u_I * win_size
         J_var = J2_sum - 2 * u_J * J_sum + u_J * u_J * win_size
-        
+
         cc = cross * cross / (I_var * J_var + self.eps)
 
         # return negative cc.
@@ -149,24 +150,51 @@ class SAD:
     def __call__(self, y_true, y_pred):
         return torch.mean(torch.abs(y_true - y_pred))
 
+
 class TRE:
     """
     Target registration error for keypoints
     """
-    def __init__(self, mode='round'):
+
+    def __init__(self, mode="round"):
         self.mode = mode
-                                                                                           
-    def __call__(self, fix_lms, mov_lms, disp, spacing_fix, spacing_mov, downsample=1, normalize=True):
-        mov_lms = mov_lms.squeeze().flip(-1) # row, 3
-        fix_lms = fix_lms.squeeze().flip(-1) # row, 3
+
+    def __call__(
+        self,
+        fix_lms,
+        mov_lms,
+        disp,
+        spacing_fix,
+        spacing_mov,
+        downsample=1,
+        normalize=True,
+    ):
+        mov_lms = mov_lms.squeeze().flip(-1)  # row, 3
+        fix_lms = fix_lms.squeeze().flip(-1)  # row, 3
         H, W, D = disp.shape[2:]
         if normalize:
-            mov_lms = mov_lms / torch.tensor([H*downsample, W*downsample, D*downsample]).cuda() * 2 - 1
-            fix_lms = fix_lms / torch.tensor([H*downsample, W*downsample, D*downsample]).cuda() * 2 - 1
+            mov_lms = (
+                mov_lms
+                / torch.tensor([H * downsample, W * downsample, D * downsample]).cuda()
+                * 2
+                - 1
+            )
+            fix_lms = (
+                fix_lms
+                / torch.tensor([H * downsample, W * downsample, D * downsample]).cuda()
+                * 2
+                - 1
+            )
 
         gt_lmdiff = mov_lms - fix_lms
 
-        pred_lmsdiff = F.grid_sample(disp, fix_lms.view(1, -1, 1, 1, 3), align_corners=True, mode='bilinear').squeeze().t()
+        pred_lmsdiff = (
+            F.grid_sample(
+                disp, fix_lms.view(1, -1, 1, 1, 3), align_corners=True, mode="bilinear"
+            )
+            .squeeze()
+            .t()
+        )
         return torch.nn.MSELoss()(pred_lmsdiff, gt_lmdiff)
 
 
@@ -174,5 +202,6 @@ class MINDSSC:
     """
     MIND loss.
     """
+
     def __call__(self, x, y):
         return torch.mean((mindssc(x) - mindssc(y)) ** 2)

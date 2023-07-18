@@ -5,6 +5,7 @@ import math
 import numpy as np
 from utils.train_utils import initialize_weights
 
+
 # This code is adapted from https://github.com/xi-jia/LKU-Net/blob/main/Models.py
 class LK_encoder(nn.Module):
     def __init__(
@@ -107,7 +108,7 @@ class LK_encoder(nn.Module):
 
 
 class LKUNet(nn.Module):
-    def __init__(self, in_channel, n_classes, start_channel, layer_type='lku'):
+    def __init__(self, in_channel, n_classes, start_channel, layer_type="lku"):
         self.in_channel = in_channel
         self.n_classes = n_classes
         self.start_channel = start_channel
@@ -120,7 +121,7 @@ class LKUNet(nn.Module):
         self.ec2 = self.encoder(
             self.start_channel, self.start_channel * 2, stride=2, bias=bias_opt
         )
-        if self.layer_type == 'lku':
+        if self.layer_type == "lku":
             self.ec3 = LK_encoder(
                 self.start_channel * 2,
                 self.start_channel * 2,
@@ -129,7 +130,7 @@ class LKUNet(nn.Module):
                 padding=2,
                 bias=bias_opt,
             )
-        elif self.layer_type == 'vxm':
+        elif self.layer_type == "vxm":
             self.ec3 = self.encoder(
                 self.start_channel * 2,
                 self.start_channel * 2,
@@ -138,11 +139,11 @@ class LKUNet(nn.Module):
                 padding=1,
                 bias=bias_opt,
             )
-    
+
         self.ec4 = self.encoder(
             self.start_channel * 2, self.start_channel * 4, stride=2, bias=bias_opt
         )
-        if self.layer_type == 'lku':
+        if self.layer_type == "lku":
             self.ec5 = LK_encoder(
                 self.start_channel * 4,
                 self.start_channel * 4,
@@ -151,7 +152,7 @@ class LKUNet(nn.Module):
                 padding=2,
                 bias=bias_opt,
             )
-        elif self.layer_type == 'vxm':
+        elif self.layer_type == "vxm":
             self.ec5 = self.encoder(
                 self.start_channel * 4,
                 self.start_channel * 4,
@@ -160,11 +161,11 @@ class LKUNet(nn.Module):
                 padding=1,
                 bias=bias_opt,
             )
-            
+
         self.ec6 = self.encoder(
             self.start_channel * 4, self.start_channel * 8, stride=2, bias=bias_opt
         )
-        if self.layer_type == 'lku':
+        if self.layer_type == "lku":
             self.ec7 = LK_encoder(
                 self.start_channel * 8,
                 self.start_channel * 8,
@@ -173,7 +174,7 @@ class LKUNet(nn.Module):
                 padding=2,
                 bias=bias_opt,
             )
-        elif self.layer_type == 'vxm':
+        elif self.layer_type == "vxm":
             self.ec7 = self.encoder(
                 self.start_channel * 8,
                 self.start_channel * 8,
@@ -184,7 +185,7 @@ class LKUNet(nn.Module):
         self.ec8 = self.encoder(
             self.start_channel * 8, self.start_channel * 8, stride=2, bias=bias_opt
         )
-        if self.layer_type == 'lku':
+        if self.layer_type == "lku":
             self.ec9 = LK_encoder(
                 self.start_channel * 8,
                 self.start_channel * 8,
@@ -193,7 +194,7 @@ class LKUNet(nn.Module):
                 padding=2,
                 bias=bias_opt,
             )
-        elif self.layer_type == 'vxm':
+        elif self.layer_type == "vxm":
             self.ec9 = self.encoder(
                 self.start_channel * 8,
                 self.start_channel * 8,
@@ -391,7 +392,7 @@ class LKUNet(nn.Module):
             e1 = self.ec3(e1)
 
         e2 = self.ec4(e1)
-        
+
         if self.layer_type != None:
             e2 = self.ec5(e2)
 
@@ -400,7 +401,7 @@ class LKUNet(nn.Module):
             e3 = self.ec7(e3)
 
         e4 = self.ec8(e3)
-        
+
         if self.layer_type != None:
             e4 = self.ec9(e4)
 
@@ -427,5 +428,3 @@ class LKUNet(nn.Module):
         # f_yx = self.dc10(d3)
 
         return f_xy  # , f_yx
-
-

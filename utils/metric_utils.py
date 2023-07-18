@@ -81,8 +81,8 @@ def jacobian_determinant(disp):
             - jacobian[0, 2, :, :, :] * jacobian[1, 1, :, :, :]
         )
     )
-    
-    jacdet = (jacdet + 3).clip(1e-9, 1e+9)
+
+    jacdet = (jacdet + 3).clip(1e-9, 1e9)
     return (jacdet <= 0).astype(float).sum(), np.log(jacdet)
 
 

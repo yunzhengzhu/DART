@@ -49,13 +49,15 @@ class baseTrainer:
         self.freeze = args.freeze
         self.pretrained = args.pretrained if mode == "train" else None
         self.rev_metric = args.rev_metric
-        self.blur_factor = args.blur_factor if mode == "train" else args.eval_blur_factor
+        self.blur_factor = (
+            args.blur_factor if mode == "train" else args.eval_blur_factor
+        )
         self.es_criterion = args.es_criterion
         self.mind_feature = args.mind_feature
         self.wd = args.wd
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        
+
         self.__init_model()
         self.__init_loss()
         self.__init_optimizer()
@@ -76,9 +78,13 @@ class baseTrainer:
         print(f"Initiate {self.opt} optimizer", end=" ")
 
         if self.opt == "adam":
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, weight_decay = self.wd)
+            self.optimizer = torch.optim.Adam(
+                self.model.parameters(), lr=self.lr, weight_decay=self.wd
+            )
         elif self.opt == "sgd":
-            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr, weight_decay = self.wd)
+            self.optimizer = torch.optim.SGD(
+                self.model.parameters(), lr=self.lr, weight_decay=self.wd
+            )
         else:
             raise NotImplementedError
 
@@ -141,21 +147,31 @@ class baseTrainer:
     def __init_model(self):
         print(f"Initiate {self.model_type} model", end=" ")
         in_channel = 24 if self.mind_feature else 2
-            
+
         if self.model_type == "LKU-Net":
             self.model = LKUNet(
-                in_channel=in_channel, n_classes=3, start_channel=self.start_channel, layer_type='lku'
+                in_channel=in_channel,
+                n_classes=3,
+                start_channel=self.start_channel,
+                layer_type="lku",
             )
             print(self.model)
         elif self.model_type == "ResUNet":
-            self.model = ResUNetReg(in_channel=in_channel, n_classes=3, kernel='regular')
+            self.model = ResUNetReg(
+                in_channel=in_channel, n_classes=3, kernel="regular"
+            )
             print(self.model)
         elif self.model_type == "UNet":
-            self.model = UNetReg(in_channel=in_channel, n_classes=3, kernel='large', lknorm='instancenorm')
+            self.model = UNetReg(
+                in_channel=in_channel,
+                n_classes=3,
+                kernel="large",
+                lknorm="instancenorm",
+            )
             print(self.model)
         else:
             raise NotImplementedError
-            
+
         print("...done")
 
         if self.freeze:
@@ -166,15 +182,17 @@ class baseTrainer:
 
         if self.pretrained:
             print("Load pretrained model", end=" ")
-            self.model.load_state_dict(torch.load(self.pretrained, map_location='cuda:0'))
+            self.model.load_state_dict(
+                torch.load(self.pretrained, map_location="cuda:0")
+            )
             print("...done")
 
         self.spatial_transform = SpatialTransform()
         if self.diff:
             self.diff_transform = DiffeomorphicTransform()
-        
+
         if self.blur_factor:
-            self.blur = ResizeTransform(factor=1/self.blur_factor)
+            self.blur = ResizeTransform(factor=1 / self.blur_factor)
             self.deblur = ResizeTransform(factor=self.blur_factor)
         else:
             self.blur = None
@@ -228,7 +246,7 @@ class Trainer(baseTrainer):
         self.es_ckpt_path = os.path.join(args.exp_dir, "es_checkpoint.pth.tar")
         self.save_df = args.save_df
         self.save_warped = args.save_warped
-    
+
     def train(
         self,
         train_loader: torch.utils.data.DataLoader,
@@ -241,7 +259,12 @@ class Trainer(baseTrainer):
             # training
             train_loss_sum = 0
             train_sub_loss_sum = {l: 0.0 for l in self.loss}
-            train_num_foldings, train_log_jac_det_std, train_tre, train_dice = [], [], [], []
+            train_num_foldings, train_log_jac_det_std, train_tre, train_dice = (
+                [],
+                [],
+                [],
+                [],
+            )
             for batch_idx, (
                 fixed_img,
                 moving_img,
@@ -288,13 +311,19 @@ class Trainer(baseTrainer):
 
                         # compute metrics
                         (
-                           batch_num_foldings,
-                           batch_log_jac_det_std,
-                           batch_tre,
-                           batch_dice,
+                            batch_num_foldings,
+                            batch_log_jac_det_std,
+                            batch_tre,
+                            batch_dice,
                         ) = self.__compute_metrics(
-                           D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
-                           downsample=self.downsample, mode="train",
+                            D_rf,
+                            fixed_kp,
+                            moving_kp,
+                            fixed_mask,
+                            moving_mask,
+                            moving_mask_reg,
+                            downsample=self.downsample,
+                            mode="train",
                         )
                         train_num_foldings.extend(batch_num_foldings)
                         train_log_jac_det_std.extend(batch_log_jac_det_std)
@@ -333,18 +362,24 @@ class Trainer(baseTrainer):
                         fixed_img, D_rf.permute(0, 2, 3, 4, 1)
                     )
                     moving_mask_reg = self.spatial_transform(
-                        fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest" 
+                        fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                     )
 
                     # compute metrics
                     (
-                       batch_num_foldings,
-                       batch_log_jac_det_std,
-                       batch_tre,
-                       batch_dice,
+                        batch_num_foldings,
+                        batch_log_jac_det_std,
+                        batch_tre,
+                        batch_dice,
                     ) = self.__compute_metrics(
-                       D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
-                       downsample=self.downsample, mode="train",
+                        D_rf,
+                        fixed_kp,
+                        moving_kp,
+                        fixed_mask,
+                        moving_mask,
+                        moving_mask_reg,
+                        downsample=self.downsample,
+                        mode="train",
                     )
                     train_num_foldings.extend(batch_num_foldings)
                     train_log_jac_det_std.extend(batch_log_jac_det_std)
@@ -397,7 +432,15 @@ class Trainer(baseTrainer):
             train_log_jac_det_std_mean = np.mean(train_log_jac_det_std)
             train_tre_mean = np.mean(train_tre)
             train_dice_mean = np.mean(train_dice)
-            print("Epoch {} - Train Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}".format(i, train_loss_mean, train_dice_mean, train_tre_mean, train_log_jac_det_std_mean))
+            print(
+                "Epoch {} - Train Loss: {:.6f}; Dice: {:.6f}; TRE: {:.6f}; JacDet: {:.6f}".format(
+                    i,
+                    train_loss_mean,
+                    train_dice_mean,
+                    train_tre_mean,
+                    train_log_jac_det_std_mean,
+                )
+            )
             print(
                 "Epoch {} - Train Loss: {:.6f} - LR: {:.4e}".format(
                     i, train_loss_mean, self.optimizer.param_groups[0]["lr"]
@@ -417,7 +460,9 @@ class Trainer(baseTrainer):
                 self.writer.add_scalar("train/Dice", train_dice_mean, i)
                 self.writer.add_scalar("train/TRE", train_tre_mean, i)
                 self.writer.add_scalar("train/num_foldings", train_num_foldings_mean, i)
-                self.writer.add_scalar("train/log_jac_det_std", train_log_jac_det_std_mean, i)
+                self.writer.add_scalar(
+                    "train/log_jac_det_std", train_log_jac_det_std_mean, i
+                )
 
             # validation
             earlystop = self.__eval(i, val_loader)
@@ -450,8 +495,13 @@ class Trainer(baseTrainer):
         val_sub_loss_sum = {l: 0.0 for l in self.loss if l != "Smooth"}
         val_num_foldings, val_log_jac_det_std, val_tre, val_dice = [], [], [], []
         if self.rev_metric:
-            rev_val_num_foldings, rev_val_log_jac_det_std, rev_val_tre, rev_val_dice = [], [], [], []
-        
+            rev_val_num_foldings, rev_val_log_jac_det_std, rev_val_tre, rev_val_dice = (
+                [],
+                [],
+                [],
+                [],
+            )
+
         self.model.eval()
         with torch.no_grad():
             for batch_idx, (
@@ -471,12 +521,12 @@ class Trainer(baseTrainer):
                 fixed_mask, moving_mask = fixed_mask.float().to(
                     self.device
                 ), moving_mask.float().to(self.device)
-                
+
                 # mind feature
                 if self.mind_feature:
                     fixed_img = mindssc(fixed_img)
                     moving_img = mindssc(moving_img)
-                
+
                 if self.scaler:
                     with torch.cuda.amp.autocast():
                         # pass data to model
@@ -513,7 +563,7 @@ class Trainer(baseTrainer):
                 else:
                     # pass data to model
                     rf = self.model(fixed_img, moving_img)
-                    
+
                     if self.blur:
                         rf = self.blur(rf)
 
@@ -531,7 +581,7 @@ class Trainer(baseTrainer):
                     moving_mask_reg = self.spatial_transform(
                         fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                     )
-                    
+
                     val_loss, val_all_loss = self.__compute_loss(
                         self.loss_fn,
                         fixed_img,
@@ -545,7 +595,6 @@ class Trainer(baseTrainer):
                         downsample=self.downsample,
                     )
 
-                
                 # compute metrics
                 (
                     batch_num_foldings,
@@ -553,14 +602,20 @@ class Trainer(baseTrainer):
                     batch_tre,
                     batch_dice,
                 ) = self.__compute_metrics(
-                    D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
-                    downsample=self.downsample, mode="val",
+                    D_rf,
+                    fixed_kp,
+                    moving_kp,
+                    fixed_mask,
+                    moving_mask,
+                    moving_mask_reg,
+                    downsample=self.downsample,
+                    mode="val",
                 )
                 val_num_foldings.extend(batch_num_foldings)
                 val_log_jac_det_std.extend(batch_log_jac_det_std)
                 val_tre.extend(batch_tre)
                 val_dice.extend(batch_dice)
-                
+
                 if self.rev_metric:
                     rrf = -rf
                     rrf = rrf.to(torch.float32)
@@ -581,7 +636,7 @@ class Trainer(baseTrainer):
                     fixed_mask_reg = self.spatial_transform(
                         moving_mask, D_rrf.permute(0, 2, 3, 4, 1), mod="nearest"
                     )
-                    
+
                     # compute metrics from reverse direction
                     (
                         rev_batch_num_foldings,
@@ -589,8 +644,14 @@ class Trainer(baseTrainer):
                         rev_batch_tre,
                         rev_batch_dice,
                     ) = self.__compute_metrics(
-                        D_rrf, moving_kp, fixed_kp, moving_mask, fixed_mask, fixed_mask_reg,
-                        downsample=self.downsample, mode="val",
+                        D_rrf,
+                        moving_kp,
+                        fixed_kp,
+                        moving_mask,
+                        fixed_mask,
+                        fixed_mask_reg,
+                        downsample=self.downsample,
+                        mode="val",
                     )
                     rev_val_num_foldings.extend(rev_batch_num_foldings)
                     rev_val_log_jac_det_std.extend(rev_batch_log_jac_det_std)
@@ -636,7 +697,6 @@ class Trainer(baseTrainer):
                     rev_val_log_jac_det_std_mean,
                 )
             )
-            
 
         if self.writer:
             self.writer.add_scalar("val/Total_loss", val_loss_mean, cur)
@@ -649,13 +709,16 @@ class Trainer(baseTrainer):
             if self.rev_metric:
                 self.writer.add_scalar("val/Dice_rev", rev_val_dice_mean, cur)
                 self.writer.add_scalar("val/TRE_rev", rev_val_tre_mean, cur)
-                self.writer.add_scalar("val/num_foldings_rev", rev_val_num_foldings_mean, cur)
-                self.writer.add_scalar("val/log_jac_det_std_rev", rev_val_log_jac_det_std_mean, cur)
-
+                self.writer.add_scalar(
+                    "val/num_foldings_rev", rev_val_num_foldings_mean, cur
+                )
+                self.writer.add_scalar(
+                    "val/log_jac_det_std_rev", rev_val_log_jac_det_std_mean, cur
+                )
 
         # early stopping
         if self.es:
-            if self.es_criterion == 'total':
+            if self.es_criterion == "total":
                 self.early_stopping(
                     epoch=cur,
                     val_loss=val_loss_mean,
@@ -668,7 +731,7 @@ class Trainer(baseTrainer):
                     val_loss=val_sub_loss_mean[self.es_criterion],
                     model=self.model,
                     ckpt_path=self.es_ckpt_path,
-                )   
+                )
             return self.early_stopping.early_stop
         else:
             return False
@@ -687,8 +750,13 @@ class Trainer(baseTrainer):
         val_loss_sum = 0
         val_sub_loss_sum = {l: 0.0 for l in self.loss if l != "Smooth"}
         val_num_foldings, val_log_jac_det_std, val_tre, val_dice = [], [], [], []
-        if self.rev_metric: 
-            rev_val_num_foldings, rev_val_log_jac_det_std, rev_val_tre, rev_val_dice = [], [], [], []
+        if self.rev_metric:
+            rev_val_num_foldings, rev_val_log_jac_det_std, rev_val_tre, rev_val_dice = (
+                [],
+                [],
+                [],
+                [],
+            )
         with torch.no_grad():
             for batch_idx, (
                 fixed_img,
@@ -712,7 +780,7 @@ class Trainer(baseTrainer):
                 if self.mind_feature:
                     fixed_img = mindssc(fixed_img)
                     moving_img = mindssc(moving_img)
-                
+
                 if self.scaler:
                     with torch.cuda.amp.autocast():
                         # pass data to model
@@ -727,7 +795,7 @@ class Trainer(baseTrainer):
 
                         if self.deblur:
                             D_rf = self.deblur(D_rf)
-                        
+
                         moving_reg = self.spatial_transform(
                             fixed_img, D_rf.permute(0, 2, 3, 4, 1)
                         )
@@ -759,14 +827,14 @@ class Trainer(baseTrainer):
 
                     if self.deblur:
                         D_rf = self.deblur(D_rf)
-                    
+
                     moving_reg = self.spatial_transform(
                         fixed_img, D_rf.permute(0, 2, 3, 4, 1)
                     )
                     moving_mask_reg = self.spatial_transform(
                         fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                     )
-                    
+
                     val_loss, val_all_loss = self.__compute_loss(
                         self.loss_fn,
                         fixed_img,
@@ -787,14 +855,20 @@ class Trainer(baseTrainer):
                     batch_tre,
                     batch_dice,
                 ) = self.__compute_metrics(
-                    D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
-                    downsample=self.downsample, mode="val",
+                    D_rf,
+                    fixed_kp,
+                    moving_kp,
+                    fixed_mask,
+                    moving_mask,
+                    moving_mask_reg,
+                    downsample=self.downsample,
+                    mode="val",
                 )
                 val_num_foldings.extend(batch_num_foldings)
                 val_log_jac_det_std.extend(batch_log_jac_det_std)
                 val_tre.extend(batch_tre)
                 val_dice.extend(batch_dice)
-                
+
                 if self.rev_metric:
                     rrf = -rf
                     rrf = rrf.to(torch.float32)
@@ -815,7 +889,7 @@ class Trainer(baseTrainer):
                     fixed_mask_reg = self.spatial_transform(
                         moving_mask, D_rrf.permute(0, 2, 3, 4, 1), mod="nearest"
                     )
-                    
+
                     # compute metrics from reverse direction
                     (
                         rev_batch_num_foldings,
@@ -823,8 +897,14 @@ class Trainer(baseTrainer):
                         rev_batch_tre,
                         rev_batch_dice,
                     ) = self.__compute_metrics(
-                        D_rrf, moving_kp, fixed_kp, moving_mask, fixed_mask, fixed_mask_reg,
-                        downsample=self.downsample, mode="val",
+                        D_rrf,
+                        moving_kp,
+                        fixed_kp,
+                        moving_mask,
+                        fixed_mask,
+                        fixed_mask_reg,
+                        downsample=self.downsample,
+                        mode="val",
                     )
                     rev_val_num_foldings.extend(rev_batch_num_foldings)
                     rev_val_log_jac_det_std.extend(rev_batch_log_jac_det_std)
@@ -850,31 +930,57 @@ class Trainer(baseTrainer):
                             * val_loader.batch_size
                         ]
                     ):
-                        H= val_loader.dataset.H // self.downsample
-                        W= val_loader.dataset.W // self.downsample
-                        D= val_loader.dataset.D // self.downsample
+                        H = val_loader.dataset.H // self.downsample
+                        W = val_loader.dataset.W // self.downsample
+                        D = val_loader.dataset.D // self.downsample
 
                         subject_id = subject["moving"].split("/")[-1].split("_")[1]
                         if self.save_df:
                             if self.downsample > 1:
-                                D_rf = F.interpolate(D_rf,scale_factor=self.downsample,mode='trilinear')
-                            D_rf=((D_rf.permute(0,2,3,4,1))*(torch.tensor([D,W,H]).cuda()-1)).flip(-1).float().squeeze().cpu()
-                            nib.save(nib.Nifti1Image(D_rf.numpy(), np.eye(4)), 
-                                     os.path.join(self.exp_dir,"displacement_field", 
-                                                  f'disp_{str(subject_id).zfill(4)}_{str(subject_id).zfill(4)}.nii.gz'))
-                        if self.save_warped: 
+                                D_rf = F.interpolate(
+                                    D_rf, scale_factor=self.downsample, mode="trilinear"
+                                )
+                            D_rf = (
+                                (
+                                    (D_rf.permute(0, 2, 3, 4, 1))
+                                    * (torch.tensor([D, W, H]).cuda() - 1)
+                                )
+                                .flip(-1)
+                                .float()
+                                .squeeze()
+                                .cpu()
+                            )
+                            nib.save(
+                                nib.Nifti1Image(D_rf.numpy(), np.eye(4)),
+                                os.path.join(
+                                    self.exp_dir,
+                                    "displacement_field",
+                                    f"disp_{str(subject_id).zfill(4)}_{str(subject_id).zfill(4)}.nii.gz",
+                                ),
+                            )
+                        if self.save_warped:
                             if self.downsample > 1:
-                                moving_reg = F.interpolate(moving_reg,scale_factor=self.downsample,mode='trilinear')
+                                moving_reg = F.interpolate(
+                                    moving_reg,
+                                    scale_factor=self.downsample,
+                                    mode="trilinear",
+                                )
                             moving_reg = moving_reg.squeeze().cpu()
                             # denormalize warped
-                            moving_reg = (moving_reg * (500 - (-1000)) + (-1000)).to(torch.int16)
+                            moving_reg = (moving_reg * (500 - (-1000)) + (-1000)).to(
+                                torch.int16
+                            )
                             aff = np.eye(4) * 1.5
                             aff[3, 3] = 1.0
-                            #aff = np.eye(4)
-                            nib.save(nib.Nifti1Image(moving_reg.numpy(), aff),
-                                    os.path.join(self.exp_dir,"warped_results",
-                                                 f'warped_{str(subject_id).zfill(4)}_{str(subject_id).zfill(4)}.nii.gz'))
-
+                            # aff = np.eye(4)
+                            nib.save(
+                                nib.Nifti1Image(moving_reg.numpy(), aff),
+                                os.path.join(
+                                    self.exp_dir,
+                                    "warped_results",
+                                    f"warped_{str(subject_id).zfill(4)}_{str(subject_id).zfill(4)}.nii.gz",
+                                ),
+                            )
 
         val_loss_mean = val_loss_sum / len(val_loader)
         val_sub_loss_mean = {
@@ -944,8 +1050,15 @@ class Trainer(baseTrainer):
 
     @staticmethod
     def __compute_metrics(
-        D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
-        downsample=1, use_mask='fixed', mode='train',
+        D_rf,
+        fixed_kp,
+        moving_kp,
+        fixed_mask,
+        moving_mask,
+        moving_mask_reg,
+        downsample=1,
+        use_mask="fixed",
+        mode="train",
     ):
         batch_num_foldings, batch_log_jac_det_std, batch_tre, batch_dice = (
             [],
@@ -957,27 +1070,44 @@ class Trainer(baseTrainer):
         # recover to the shape of original image
         if downsample != 1:
             D_rf = F.interpolate(D_rf, scale_factor=downsample, mode="trilinear")
-            fixed_mask = F.interpolate(fixed_mask, scale_factor=downsample, mode="trilinear")
-            moving_mask = F.interpolate(moving_mask, scale_factor=downsample, mode="trilinear")
-            moving_mask_reg = F.interpolate(moving_mask_reg, scale_factor=downsample, mode="trilinear")
+            fixed_mask = F.interpolate(
+                fixed_mask, scale_factor=downsample, mode="trilinear"
+            )
+            moving_mask = F.interpolate(
+                moving_mask, scale_factor=downsample, mode="trilinear"
+            )
+            moving_mask_reg = F.interpolate(
+                moving_mask_reg, scale_factor=downsample, mode="trilinear"
+            )
 
         # denormalize the disp (to the scale of training images)
-        D_rf = ((D_rf.permute(0, 2, 3, 4, 1)) * (torch.tensor([D, H, W]).cuda()-1)).flip(-1).float()
+        D_rf = (
+            ((D_rf.permute(0, 2, 3, 4, 1)) * (torch.tensor([D, H, W]).cuda() - 1))
+            .flip(-1)
+            .float()
+        )
         for subject_idx in range(len(D_rf)):
-            if mode == 'val':
+            if mode == "val":
                 # jacobian determinant
                 num_foldings, log_jac_det = jacobian_determinant(
-                    D_rf[subject_idx : subject_idx + 1].permute(0, 4, 1, 2, 3)
+                    D_rf[subject_idx : subject_idx + 1]
+                    .permute(0, 4, 1, 2, 3)
                     .clone()
                     .detach()
                     .cpu()
                     .numpy()
                 )
-                
+
                 if use_mask != None:
-                    mask = fixed_mask if use_mask == 'fixed' else moving_mask 
+                    mask = fixed_mask if use_mask == "fixed" else moving_mask
                     log_jac_det_std = np.ma.MaskedArray(
-                        log_jac_det, 1-mask.squeeze().clone().detach().cpu().numpy()[2:-2, 2:-2, 2:-2]
+                        log_jac_det,
+                        1
+                        - mask.squeeze()
+                        .clone()
+                        .detach()
+                        .cpu()
+                        .numpy()[2:-2, 2:-2, 2:-2],
                     ).std()
                 else:
                     log_jac_det_std = log_jac_det.std()
@@ -989,15 +1119,11 @@ class Trainer(baseTrainer):
             tre = compute_tre(
                 fix_lms=fixed_kp[subject_idx].clone().detach().cpu().numpy(),
                 mov_lms=moving_kp[subject_idx].clone().detach().cpu().numpy(),
-                disp=D_rf[subject_idx]
-                .clone()
-                .detach()
-                .cpu()
-                .numpy(),
+                disp=D_rf[subject_idx].clone().detach().cpu().numpy(),
                 spacing_fix=(1.5, 1.5, 1.5),
                 spacing_mov=(1.5, 1.5, 1.5),
             )  # spacing is 1.5 for NLST
-           
+
             # Dice masks
             mean_dice, dice = compute_dice(
                 fixed=fixed_mask[subject_idx].clone().detach().cpu().numpy(),
@@ -1017,7 +1143,16 @@ class Trainer(baseTrainer):
 
     @staticmethod
     def __compute_loss(
-        loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, fixed_kp, moving_kp, rf, mode="train", downsample=1
+        loss_fn,
+        fixed_img,
+        moving_reg,
+        fixed_mask,
+        moving_mask_reg,
+        fixed_kp,
+        moving_kp,
+        rf,
+        mode="train",
+        downsample=1,
     ):
         loss = 0.0
         all_loss = {}
@@ -1050,14 +1185,17 @@ class Trainer(baseTrainer):
                 loss += sad_loss
                 all_loss["SAD"] = sad_loss.item()
             elif l == "TRE":
-                tre_loss = lw[0](
-                    fix_lms=fixed_kp,
-                    mov_lms=moving_kp,
-                    disp=rf,
-                    spacing_fix=1.5,
-                    spacing_mov=1.5,
-                    downsample=downsample
-                ) * lw[1]
+                tre_loss = (
+                    lw[0](
+                        fix_lms=fixed_kp,
+                        mov_lms=moving_kp,
+                        disp=rf,
+                        spacing_fix=1.5,
+                        spacing_mov=1.5,
+                        downsample=downsample,
+                    )
+                    * lw[1]
+                )
                 loss += tre_loss
                 all_loss["TRE"] = tre_loss.item()
             elif l == "MINDSSC":
