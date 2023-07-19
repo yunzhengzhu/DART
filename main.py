@@ -91,7 +91,7 @@ def argParser():
     parser.add_argument("--opt", type=str, default="adam", help="optimizer")
     parser.add_argument("--lr", type=float, default=1e-3, help="learning rate")
     parser.add_argument(
-        "--wd", type=float, default=1e-3, help="weight decay (L2 regularization)"
+        "--wd", type=float, default=0, help="weight decay (L2 regularization)"
     )
     parser.add_argument("--sche", type=str, default=None, help="scheduler")
     parser.add_argument(
@@ -213,6 +213,9 @@ def main(args):
 
             if args.random_sample:
                 exp_name += f"_rs{args.random_sample}"
+
+            if args.affine_aug:
+                exp_name += "_affineaug"
 
             if args.pretrained:
                 exp_name += f"_pretrained"

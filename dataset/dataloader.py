@@ -10,7 +10,7 @@ import scipy
 from typing import Tuple
 from model.transform import AffineTransform
 from affine import Affine
-
+import random
 
 class NLSTDataset(Dataset):
     def __init__(
@@ -119,7 +119,8 @@ class NLSTDataset(Dataset):
 
             # affine transform
             if self.affine_aug:
-                A = torch.randn(3, 4) * 0.035 + torch.eye(3, 4)
+                #A = torch.randn(3, 4) * 0.035 + torch.eye(3, 4)
+                A = torch.cat((torch.eye(3,3),torch.tensor([[random.uniform(-0.3,0.3),0,0]]).t()),1)
                 affine = F.affine_grid(
                     A.unsqueeze(0),
                     (
@@ -129,7 +130,7 @@ class NLSTDataset(Dataset):
                         self.W // self.downsample,
                         self.D // self.downsample,
                     ),
-                    align_corners=False,
+                    align_corners=True,
                 )
                 moving_kp = (
                     torch.solve(
@@ -150,7 +151,7 @@ class NLSTDataset(Dataset):
                         self.D // self.downsample,
                     ),
                     affine,
-                    align_corners=False,
+                    align_corners=True,
                 ).squeeze()
                 moving_mask = F.grid_sample(
                     moving_mask.view(
@@ -161,7 +162,7 @@ class NLSTDataset(Dataset):
                         self.D // self.downsample,
                     ),
                     affine,
-                    align_corners=False,
+                    align_corners=True,
                 ).squeeze()
 
         fixed_img = fixed_img.unsqueeze(0)
