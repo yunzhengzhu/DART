@@ -12,6 +12,7 @@ from model.transform import AffineTransform
 from affine import Affine
 import random
 
+
 class NLSTDataset(Dataset):
     def __init__(
         self,
@@ -119,8 +120,15 @@ class NLSTDataset(Dataset):
 
             # affine transform
             if self.affine_aug:
-                #A = torch.randn(3, 4) * 0.035 + torch.eye(3, 4)
-                A = torch.cat((torch.eye(3,3),torch.tensor([[random.uniform(-0.3,0.3),0,0]]).t()),1)
+                # A = torch.randn(3, 4) * 0.035 + torch.eye(3, 4)
+                #only apply translation
+                A = torch.cat(
+                    (
+                        torch.eye(3, 3),
+                        torch.tensor([[random.uniform(-0.1, 0.1), 0, 0]]).t(),
+                    ),
+                    1,
+                )
                 affine = F.affine_grid(
                     A.unsqueeze(0),
                     (
@@ -132,9 +140,26 @@ class NLSTDataset(Dataset):
                     ),
                     align_corners=True,
                 )
+                # normalize kp
+                norm_moving_kp = (
+                    moving_kp
+                    / torch.tensor(
+                        [
+                            self.H // self.downsample,
+                            self.W // self.downsample,
+                            self.D // self.downsample,
+                        ]
+                    )
+                    * 2
+                    - 1
+                ).flip(-1)
+
+                # apply affine
                 moving_kp = (
                     torch.solve(
-                        torch.cat((moving_kp, torch.ones(moving_kp.shape[0], 1)), 1)
+                        torch.cat(
+                            (norm_moving_kp, torch.ones(norm_moving_kp.shape[0], 1)), 1
+                        )
                         .float()
                         .t(),
                         torch.cat((A, torch.tensor([0, 0, 0, 1]).view(1, -1)), 0),
@@ -142,6 +167,21 @@ class NLSTDataset(Dataset):
                     .t()[:, :3]
                     .squeeze()
                 )
+
+                # denormalize kp
+                moving_kp = (
+                    (moving_kp + 1)
+                    / 2
+                    * torch.tensor(
+                        [
+                            self.H // self.downsample,
+                            self.W // self.downsample,
+                            self.D // self.downsample,
+                        ]
+                    )
+                ).flip(-1)
+
+                #apply affine to image and mask
                 moving_img = F.grid_sample(
                     moving_img.view(
                         1,
@@ -153,6 +193,7 @@ class NLSTDataset(Dataset):
                     affine,
                     align_corners=True,
                 ).squeeze()
+
                 moving_mask = F.grid_sample(
                     moving_mask.view(
                         1,
