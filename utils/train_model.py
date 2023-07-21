@@ -13,7 +13,7 @@ from model.lkunet import LKUNet
 from model.resunet import ResUNetReg
 from model.unet import UNetReg
 from model.transform import SpatialTransform, DiffeomorphicTransform, ResizeTransform
-from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE
+from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE, MINDSSC 
 from utils.train_utils import EarlyStopping
 from utils.metric_utils import jacobian_determinant, compute_tre, compute_dice
 from utils.feature_utils import mindssc
@@ -131,6 +131,10 @@ class baseTrainer:
                 self.loss_fn[l] = [SAD(), lw]
             elif l == "TRE":
                 self.loss_fn[l] = [TRE(), lw]
+            elif l == "MINDSSC":
+                self.loss_fn[l] = [MINDSSC(), lw]
+            elif l == "MINDSSC_NCC":
+                self.loss_fn[l] = [MINDSSC(loss_type="ncc"), lw]
             else:
                 raise NotImplementedError
         print("...done")
@@ -259,12 +263,15 @@ class Trainer(baseTrainer):
 
                 # mind feature
                 if self.mind_feature:
-                    fixed_img = mindssc(fixed_img)
-                    moving_img = mindssc(moving_img)
+                    fixed_mind = mindssc(fixed_img)
+                    moving_mind = mindssc(moving_img)
+                    model_input = (fixed_mind, moving_mind)
+                else:
+                    model_input = (fixed_img, moving_img)
 
                 if self.scaler:
                     with torch.cuda.amp.autocast():
-                        rf = self.model(fixed_img, moving_img)
+                        rf = self.model(model_input[0], model_input[1])
                         if self.blur:
                             rf = self.blur(rf)
 
@@ -276,10 +283,10 @@ class Trainer(baseTrainer):
                         if self.deblur:
                             D_rf = self.deblur(D_rf)
 
-                        moving_reg = self.spatial_transform(
+                        warp_img = self.spatial_transform(
                             fixed_img, D_rf.permute(0, 2, 3, 4, 1)
                         )
-                        moving_mask_reg = self.spatial_transform(
+                        warp_mask = self.spatial_transform(
                             fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                         )
 
@@ -290,7 +297,7 @@ class Trainer(baseTrainer):
                            batch_tre,
                            batch_dice,
                         ) = self.__compute_metrics(
-                           D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
+                           D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, warp_mask,
                            downsample=self.downsample, mode="train",
                         )
                         train_num_foldings.extend(batch_num_foldings)
@@ -299,10 +306,10 @@ class Trainer(baseTrainer):
                         train_dice.extend(batch_dice)
                         train_loss, train_all_loss = self.__compute_loss(
                             self.loss_fn,
-                            fixed_img,
-                            moving_reg,
-                            fixed_mask,
-                            moving_mask_reg,
+                            moving_img,
+                            warp_img,
+                            moving_mask,
+                            warp_mask,
                             fixed_kp,
                             moving_kp,
                             rf,
@@ -314,7 +321,7 @@ class Trainer(baseTrainer):
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
                 else:
-                    rf = self.model(fixed_img, moving_img)
+                    rf = self.model(model_input[0], model_input[1])
                     if self.blur:
                         rf = self.blur(rf)
 
@@ -326,10 +333,10 @@ class Trainer(baseTrainer):
                     if self.deblur:
                         D_rf = self.deblur(D_rf)
 
-                    moving_reg = self.spatial_transform(
+                    warp_img = self.spatial_transform(
                         fixed_img, D_rf.permute(0, 2, 3, 4, 1)
                     )
-                    moving_mask_reg = self.spatial_transform(
+                    warp_mask = self.spatial_transform(
                         fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest" 
                     )
 
@@ -340,7 +347,7 @@ class Trainer(baseTrainer):
                        batch_tre,
                        batch_dice,
                     ) = self.__compute_metrics(
-                       D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
+                       D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, warp_mask,
                        downsample=self.downsample, mode="train",
                     )
                     train_num_foldings.extend(batch_num_foldings)
@@ -350,10 +357,10 @@ class Trainer(baseTrainer):
 
                     train_loss, train_all_loss = self.__compute_loss(
                         self.loss_fn,
-                        fixed_img,
-                        moving_reg,
-                        fixed_mask,
-                        moving_mask_reg,
+                        moving_img,
+                        warp_img,
+                        moving_mask,
+                        warp_mask,
                         fixed_kp,
                         moving_kp,
                         rf,
@@ -426,7 +433,7 @@ class Trainer(baseTrainer):
                 "optimizer": self.optimizer.state_dict(),
                 "scheduler": scheduler_state_dict,
                 "early_stopping": self.early_stopping,
-                #'logger': self.writer
+                #"logger": self.writer
             }
 
             torch.save(state, self.ckpt_path)
@@ -471,13 +478,16 @@ class Trainer(baseTrainer):
                 
                 # mind feature
                 if self.mind_feature:
-                    fixed_img = mindssc(fixed_img)
-                    moving_img = mindssc(moving_img)
-                
+                    fixed_mind = mindssc(fixed_img)
+                    moving_mind = mindssc(moving_img)
+                    model_input = (fixed_mind, moving_mind)
+                else:
+                    model_input = (fixed_img, moving_img)
+
                 if self.scaler:
                     with torch.cuda.amp.autocast():
                         # pass data to model
-                        rf = self.model(fixed_img, moving_img)
+                        rf = self.model(model_input[0], model_input[1])
                         if self.blur:
                             rf = self.blur(rf)
 
@@ -489,18 +499,18 @@ class Trainer(baseTrainer):
                         if self.deblur:
                             D_rf = self.deblur(D_rf)
 
-                        moving_reg = self.spatial_transform(
+                        warp_img = self.spatial_transform(
                             fixed_img, D_rf.permute(0, 2, 3, 4, 1)
                         )
-                        moving_mask_reg = self.spatial_transform(
+                        warp_mask = self.spatial_transform(
                             fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                         )
                         val_loss, val_all_loss = self.__compute_loss(
                             self.loss_fn,
-                            fixed_img,
-                            moving_reg,
-                            fixed_mask,
-                            moving_mask_reg,
+                            moving_img,
+                            warp_img,
+                            moving_mask,
+                            warp_mask,
                             fixed_kp,
                             moving_kp,
                             rf,
@@ -509,7 +519,7 @@ class Trainer(baseTrainer):
                         )
                 else:
                     # pass data to model
-                    rf = self.model(fixed_img, moving_img)
+                    rf = self.model(model_input[0], model_input[1])
                     
                     if self.blur:
                         rf = self.blur(rf)
@@ -522,19 +532,19 @@ class Trainer(baseTrainer):
                     if self.deblur:
                         D_rf = self.deblur(D_rf)
 
-                    moving_reg = self.spatial_transform(
+                    warp_img = self.spatial_transform(
                         fixed_img, D_rf.permute(0, 2, 3, 4, 1)
                     )
-                    moving_mask_reg = self.spatial_transform(
+                    warp_mask = self.spatial_transform(
                         fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                     )
                     
                     val_loss, val_all_loss = self.__compute_loss(
                         self.loss_fn,
-                        fixed_img,
-                        moving_reg,
-                        fixed_mask,
-                        moving_mask_reg,
+                        moving_img,
+                        warp_img,
+                        moving_mask,
+                        warp_mask,
                         fixed_kp,
                         moving_kp,
                         rf,
@@ -550,7 +560,7 @@ class Trainer(baseTrainer):
                     batch_tre,
                     batch_dice,
                 ) = self.__compute_metrics(
-                    D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
+                    D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, warp_mask,
                     downsample=self.downsample, mode="val",
                 )
                 val_num_foldings.extend(batch_num_foldings)
@@ -572,10 +582,10 @@ class Trainer(baseTrainer):
                     if self.deblur:
                         D_rf = self.deblur(D_rf)
 
-                    fixed_reg = self.spatial_transform(
+                    warp_reg_rev = self.spatial_transform(
                         moving_img, D_rrf.permute(0, 2, 3, 4, 1)
                     )
-                    fixed_mask_reg = self.spatial_transform(
+                    warp_mask_rev = self.spatial_transform(
                         moving_mask, D_rrf.permute(0, 2, 3, 4, 1), mod="nearest"
                     )
                     
@@ -586,7 +596,7 @@ class Trainer(baseTrainer):
                         rev_batch_tre,
                         rev_batch_dice,
                     ) = self.__compute_metrics(
-                        D_rrf, moving_kp, fixed_kp, moving_mask, fixed_mask, fixed_mask_reg,
+                        D_rrf, moving_kp, fixed_kp, moving_mask, fixed_mask, warp_mask_rev,
                         downsample=self.downsample, mode="val",
                     )
                     rev_val_num_foldings.extend(rev_batch_num_foldings)
@@ -707,13 +717,16 @@ class Trainer(baseTrainer):
 
                 # mind feature
                 if self.mind_feature:
-                    fixed_img = mindssc(fixed_img)
-                    moving_img = mindssc(moving_img)
-                
+                    fixed_mind = mindssc(fixed_img)
+                    moving_mind = mindssc(moving_img)
+                    model_input = (fixed_mind, moving_mind)
+                else:
+                    model_input = (fixed_img, moving_img)
+
                 if self.scaler:
                     with torch.cuda.amp.autocast():
                         # pass data to model
-                        rf = self.model(fixed_img, moving_img)
+                        rf = self.model(model_input[0], model_input[1])
                         if self.blur:
                             rf = self.blur(rf)
 
@@ -725,18 +738,18 @@ class Trainer(baseTrainer):
                         if self.deblur:
                             D_rf = self.deblur(D_rf)
                         
-                        moving_reg = self.spatial_transform(
+                        warp_img = self.spatial_transform(
                             fixed_img, D_rf.permute(0, 2, 3, 4, 1)
                         )
-                        moving_mask_reg = self.spatial_transform(
+                        warp_mask = self.spatial_transform(
                             fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                         )
                         val_loss, val_all_loss = self.__compute_loss(
                             self.loss_fn,
-                            fixed_img,
-                            moving_reg,
-                            fixed_mask,
-                            moving_mask_reg,
+                            moving_img,
+                            warp_img,
+                            moving_mask,
+                            warp_mask,
                             fixed_kp,
                             moving_kp,
                             rf,
@@ -745,7 +758,7 @@ class Trainer(baseTrainer):
                         )
                 else:
                     # pass data to model
-                    rf = self.model(fixed_img, moving_img)
+                    rf = self.model(model_input[0], model_input[1])
                     if self.blur:
                         rf = self.blur(rf)
 
@@ -757,19 +770,19 @@ class Trainer(baseTrainer):
                     if self.deblur:
                         D_rf = self.deblur(D_rf)
                     
-                    moving_reg = self.spatial_transform(
+                    warp_img = self.spatial_transform(
                         fixed_img, D_rf.permute(0, 2, 3, 4, 1)
                     )
-                    moving_mask_reg = self.spatial_transform(
+                    warp_mask = self.spatial_transform(
                         fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                     )
                     
                     val_loss, val_all_loss = self.__compute_loss(
                         self.loss_fn,
-                        fixed_img,
-                        moving_reg,
-                        fixed_mask,
-                        moving_mask_reg,
+                        moving_img,
+                        warp_img,
+                        moving_mask,
+                        warp_mask,
                         fixed_kp,
                         moving_kp,
                         rf,
@@ -784,7 +797,7 @@ class Trainer(baseTrainer):
                     batch_tre,
                     batch_dice,
                 ) = self.__compute_metrics(
-                    D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
+                    D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, warp_mask,
                     downsample=self.downsample, mode="val",
                 )
                 val_num_foldings.extend(batch_num_foldings)
@@ -806,10 +819,10 @@ class Trainer(baseTrainer):
                     if self.deblur:
                         D_rrf = self.deblur(D_rrf)
 
-                    fixed_reg = self.spatial_transform(
+                    warp_img_rev = self.spatial_transform(
                         moving_img, D_rrf.permute(0, 2, 3, 4, 1)
                     )
-                    fixed_mask_reg = self.spatial_transform(
+                    warp_mask_rev = self.spatial_transform(
                         moving_mask, D_rrf.permute(0, 2, 3, 4, 1), mod="nearest"
                     )
                     
@@ -820,7 +833,7 @@ class Trainer(baseTrainer):
                         rev_batch_tre,
                         rev_batch_dice,
                     ) = self.__compute_metrics(
-                        D_rrf, moving_kp, fixed_kp, moving_mask, fixed_mask, fixed_mask_reg,
+                        D_rrf, moving_kp, fixed_kp, moving_mask, fixed_mask, warp_mask_rev,
                         downsample=self.downsample, mode="val",
                     )
                     rev_val_num_foldings.extend(rev_batch_num_foldings)
@@ -854,21 +867,22 @@ class Trainer(baseTrainer):
                         subject_id = subject["moving"].split("/")[-1].split("_")[1]
                         if self.save_df:
                             if self.downsample > 1:
-                                D_rf = F.interpolate(D_rf,scale_factor=self.downsample,mode='trilinear')
+                                D_rf = F.interpolate(D_rf,scale_factor=self.downsample,align_corners=True,mode='trilinear')
                             D_rf=((D_rf.permute(0,2,3,4,1))*(torch.tensor([D,W,H]).cuda()-1)).flip(-1).float().squeeze().cpu()
                             nib.save(nib.Nifti1Image(D_rf.numpy(), np.eye(4)), 
                                      os.path.join(self.exp_dir,"displacement_field", 
                                                   f'disp_{str(subject_id).zfill(4)}_{str(subject_id).zfill(4)}.nii.gz'))
-                        if self.save_warped: 
+                        
+                        if self.save_warped:
                             if self.downsample > 1:
-                                moving_reg = F.interpolate(moving_reg,scale_factor=self.downsample,mode='trilinear')
-                            moving_reg = moving_reg.squeeze().cpu()
+                                warp_img = F.interpolate(warp_img,scale_factor=self.downsample,align_corners=True,mode='trilinear')
+                            warp_img = warp_img.squeeze().cpu()
                             # denormalize warped
-                            moving_reg = (moving_reg * (500 - (-1000)) + (-1000)).to(torch.int16)
+                            warp_img = (warp_img * (500 - (-1000)) + (-1000)).to(torch.int16)
                             aff = np.eye(4) * 1.5
                             aff[3, 3] = 1.0
                             #aff = np.eye(4)
-                            nib.save(nib.Nifti1Image(moving_reg.numpy(), aff),
+                            nib.save(nib.Nifti1Image(warp_img.numpy(), aff),
                                     os.path.join(self.exp_dir,"warped_results",
                                                  f'warped_{str(subject_id).zfill(4)}_{str(subject_id).zfill(4)}.nii.gz'))
 
@@ -941,7 +955,7 @@ class Trainer(baseTrainer):
 
     @staticmethod
     def __compute_metrics(
-        D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, moving_mask_reg,
+        D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, warp_mask,
         downsample=1, use_mask='fixed', mode='train',
     ):
         batch_num_foldings, batch_log_jac_det_std, batch_tre, batch_dice = (
@@ -953,10 +967,10 @@ class Trainer(baseTrainer):
         H, W, D = D_rf.shape[2:]
         # recover to the shape of original image
         if downsample != 1:
-            D_rf = F.interpolate(D_rf, scale_factor=downsample, mode="trilinear")
-            fixed_mask = F.interpolate(fixed_mask, scale_factor=downsample, mode="trilinear")
-            moving_mask = F.interpolate(moving_mask, scale_factor=downsample, mode="trilinear")
-            moving_mask_reg = F.interpolate(moving_mask_reg, scale_factor=downsample, mode="trilinear")
+            D_rf = F.interpolate(D_rf, scale_factor=downsample, align_corners=True, mode="trilinear")
+            fixed_mask = F.interpolate(fixed_mask, scale_factor=downsample, align_corners=True, mode="trilinear")
+            moving_mask = F.interpolate(moving_mask, scale_factor=downsample, align_corners=True, mode="trilinear")
+            warp_mask = F.interpolate(warp_mask, scale_factor=downsample, align_corners=True, mode="trilinear")
 
         # denormalize the disp (to the scale of training images)
         D_rf = ((D_rf.permute(0, 2, 3, 4, 1)) * (torch.tensor([D, H, W]).cuda()-1)).flip(-1).float()
@@ -999,7 +1013,7 @@ class Trainer(baseTrainer):
             mean_dice, dice = compute_dice(
                 fixed=fixed_mask[subject_idx].clone().detach().cpu().numpy(),
                 moving=moving_mask[subject_idx].clone().detach().cpu().numpy(),
-                moving_warped=moving_mask_reg[subject_idx]
+                warped=warp_mask[subject_idx]
                 .clone()
                 .detach()
                 .cpu()
@@ -1014,17 +1028,17 @@ class Trainer(baseTrainer):
 
     @staticmethod
     def __compute_loss(
-        loss_fn, fixed_img, moving_reg, fixed_mask, moving_mask_reg, fixed_kp, moving_kp, rf, mode="train", downsample=1
+        loss_fn, gt_img, warp_img, gt_mask, warp_mask, fixed_kp, moving_kp, rf, mode="train", downsample=1
     ):
         loss = 0.0
         all_loss = {}
         for l, lw in loss_fn.items():
             if l == "NCC":
-                ncc_loss = lw[0](fixed_img, moving_reg) * lw[1]
+                ncc_loss = lw[0](gt_img, warp_img) * lw[1]
                 loss += ncc_loss
                 all_loss["NCC"] = ncc_loss.item()
             elif l == "GNCC":
-                gncc_loss = lw[0](fixed_img, moving_reg) * lw[1]
+                gncc_loss = lw[0](gt_img, warp_img) * lw[1]
                 loss += gncc_loss
                 all_loss["GNCC"] = gncc_loss.item()
             elif l == "Smooth":
@@ -1035,15 +1049,15 @@ class Trainer(baseTrainer):
                 else:
                     pass
             elif l == "Dice":
-                dice_loss = lw[0](fixed_mask, moving_mask_reg) * lw[1]
+                dice_loss = lw[0](gt_mask, warp_mask) * lw[1]
                 loss += dice_loss
                 all_loss["Dice"] = dice_loss.item()
             elif l == "MSE":
-                mse_loss = lw[0](fixed_img, moving_reg) * lw[1]
+                mse_loss = lw[0](gt_img, warp_img) * lw[1]
                 loss += mse_loss
                 all_loss["MSE"] = mse_loss.item()
             elif l == "SAD":
-                sad_loss = lw[0](fixed_img, moving_reg) * lw[1]
+                sad_loss = lw[0](gt_img, warp_img) * lw[1]
                 loss += sad_loss
                 all_loss["SAD"] = sad_loss.item()
             elif l == "TRE":
@@ -1057,6 +1071,10 @@ class Trainer(baseTrainer):
                 ) * lw[1]
                 loss += tre_loss
                 all_loss["TRE"] = tre_loss.item()
+            elif l == "MINDSSC" or "MINDSSC_NCC":
+                mindssc_loss = lw[0](gt_img, warp_img) * lw[1]
+                loss += mindssc_loss
+                all_loss[l] = mindssc_loss.item()
 
         return loss, all_loss
 

@@ -50,7 +50,7 @@ def main(args):
     with open(os.path.join(args.exp_dir, "args.json"), "r") as file:
         loaded_args = json.load(file)
     for key, value in loaded_args.items():
-        if key not in ["exp_dir", "save_df"]:
+        if key not in ["exp_dir", "save_df", "save_warped"]:
             setattr(args, key, value)
 
     # create save directory

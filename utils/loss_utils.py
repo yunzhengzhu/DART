@@ -174,5 +174,18 @@ class MINDSSC:
     """
     MIND loss.
     """
-    def __call__(self, x, y):
-        return torch.mean((mindssc(x) - mindssc(y)) ** 2)
+    def __init__(self, loss_type="mse"):
+        self.loss_type = loss_type
+
+    def __call__(self, y_true, y_pred):
+        mind_y_true = mindssc(y_true)
+        mind_y_pred = mindssc(y_pred)
+        if self.loss_type == "mse":
+            return torch.mean((mind_y_true - mind_y_pred) ** 2)
+
+        elif self.loss_type == "ncc":
+            ncc = np.zeros(mind_y_true.shape[1])
+            for channel in range(mind_y_true.shape[1]):
+                ncc[channel] = NCC()(mind_y_true[:, channel:channel+1, ...], mind_y_pred[:, channel:channel+1, ...])
+            
+            return ncc.mean()

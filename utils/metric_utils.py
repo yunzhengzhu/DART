@@ -118,12 +118,12 @@ def compute_dice_coefficient(mask_gt, mask_pred):
     return 2 * volume_intersect / volume_sum
 
 
-def compute_dice(fixed, moving, moving_warped, labels):
+def compute_dice(fixed, moving, warped, labels, reg_dir='f2m'):
     dice = []
     for i in labels:
         if ((fixed == i).sum() == 0) or ((moving == i).sum() == 0):
             dice.append(np.NAN)
         else:
-            dice.append(compute_dice_coefficient((fixed == i), (moving_warped == i)))
+            dice.append(compute_dice_coefficient((moving == i), (warped == i)))
     mean_dice = np.nanmean(dice)
     return mean_dice, dice

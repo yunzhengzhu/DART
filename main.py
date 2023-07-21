@@ -43,7 +43,10 @@ def argParser():
     parser.add_argument(
         "--random_sample", type=int, default=None, help="# of randomly sampled kp"
     )
-
+    parser.add_argument(
+        "--kp_dir", type=str, default=None, help="specify customized kp dir"
+    )
+    
     # feature extraction
     parser.add_argument(
         "--mind_feature",
@@ -206,6 +209,9 @@ def main(args):
             if args.random_sample:
                 exp_name += f"_rs{args.random_sample}"
 
+            if args.kp_dir:
+                exp_name += f"_{args.kp_dir}"
+
         exp_dir = os.path.join(args.result_dir, exp_name)
         if not os.path.exists(exp_dir):
             os.makedirs(exp_dir)
@@ -226,6 +232,7 @@ def main(args):
         downsample=args.downsample,
         preprocess=args.preprocess,
         random_sample=args.random_sample,
+        kp_dir=args.kp_dir,
     )
     val_dataset = NLSTDataset(
         data_dir=args.data_dir,

@@ -11,13 +11,14 @@ from typing import Tuple
 
 
 class NLSTDataset(Dataset):
-    def __init__(self, data_dir: str, json_file: str, mode: str = "train", downsample: int = 1, preprocess: bool = False, random_sample: int = 99999) -> None:
+    def __init__(self, data_dir: str, json_file: str, mode: str = "train", downsample: int = 1, preprocess: bool = False, random_sample: int = None, kp_dir: str = None) -> None:
         self.data_dir = data_dir
         self.json_file = json_file
         self.mode = mode
         self.downsample = downsample
         self.preprocess = preprocess
         self.random_sample = random_sample
+        self.kp_dir = kp_dir
 
         # read json file
         with open(os.path.join(data_dir, json_file)) as jf:
@@ -57,20 +58,29 @@ class NLSTDataset(Dataset):
         moving_img = self.__load_nii_img(moving_img_path, preprocess=self.preprocess, downsample=self.downsample)[None, ...]
 
         # load fixed and moving keypoints
-
-        fixed_kp = np.genfromtxt(
-                        fixed_img_path.replace("images", "keypoints").replace("nii.gz", "csv"),
-                        delimiter=",",
-                   )[None, ...] #/ self.downsample
-        
-        moving_kp = np.genfromtxt(
-                        moving_img_path.replace("images", "keypoints").replace("nii.gz", "csv"),
-                        delimiter=",",
-                    )[None, ...] #/ self.downsample
+        if self.mode == "train" and self.kp_dir:
+            fixed_kp = np.genfromtxt(
+                            fixed_img_path.replace("images", "keypoints").replace("nii.gz", "csv").replace("keypointsTr", self.kp_dir),
+                            delimiter=",",
+                        )[None, ...]
+            moving_kp = np.genfromtxt(
+                            moving_img_path.replace("images", "keypoints").replace("nii.gz", "csv").replace("keypointsTr", self.kp_dir),
+                            delimiter=",",
+                        )[None, ...]
+        else:
+            fixed_kp = np.genfromtxt(
+                            fixed_img_path.replace("images", "keypoints").replace("nii.gz", "csv"),
+                            delimiter=",",
+                       )[None, ...]
+            
+            moving_kp = np.genfromtxt(
+                            moving_img_path.replace("images", "keypoints").replace("nii.gz", "csv"),
+                            delimiter=",",
+                        )[None, ...]
 
         if self.mode == 'train':
             #randomly sample keypoints
-            if self.random_sample:
+            if self.random_sample != None:
                 random_sample_kp = np.random.choice(fixed_kp.shape[1], self.random_sample, replace=False)
                 fixed_kp = fixed_kp[:, random_sample_kp, :]
                 moving_kp = moving_kp[:, random_sample_kp, :]
