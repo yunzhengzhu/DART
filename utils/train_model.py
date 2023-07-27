@@ -1,6 +1,8 @@
+from typing import Union, Iterable
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchio as tio
 import numpy as np
 import pandas as pd
 import os
@@ -17,6 +19,7 @@ from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE, MINDSSC
 from utils.train_utils import EarlyStopping
 from utils.metric_utils import jacobian_determinant, compute_tre, compute_dice
 from utils.feature_utils import mindssc
+from utils.keypoints_utils import kpimg2kp
 from tensorboardX import SummaryWriter
 
 
@@ -52,9 +55,12 @@ class baseTrainer:
         self.blur_factor = args.blur_factor if mode == "train" else args.eval_blur_factor
         self.es_criterion = args.es_criterion
         self.mind_feature = args.mind_feature
+        self.masked_img = args.masked_img
+        self.transform_type = args.transform_type
+        self.use_augs = True if args.augs != None else False
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        
+       
         self.__init_model()
         self.__init_loss()
         self.__init_optimizer()
@@ -232,7 +238,7 @@ class Trainer(baseTrainer):
     
     def train(
         self,
-        train_loader: torch.utils.data.DataLoader,
+        train_loader: Union[torch.utils.data.DataLoader, Iterable[torch.utils.data.DataLoader]],
         val_loader: torch.utils.data.DataLoader,
     ) -> pd.DataFrame:
         # loop through epochs
@@ -243,14 +249,32 @@ class Trainer(baseTrainer):
             train_loss_sum = 0
             train_sub_loss_sum = {l: 0.0 for l in self.loss}
             train_num_foldings, train_log_jac_det_std, train_tre, train_dice = [], [], [], []
-            for batch_idx, (
-                fixed_img,
-                moving_img,
-                fixed_kp,
-                moving_kp,
-                fixed_mask,
-                moving_mask,
-            ) in enumerate(train_loader):
+            start_time = time.time()
+            for batch_idx, batch_data in enumerate(train_loader):
+                if self.use_augs:
+                    if self.transform_type == "same":
+                        fixed_img = batch_data['f_img'][tio.DATA]
+                        fixed_mask = batch_data['f_mask'][tio.DATA]
+                        fixed_kp_img = batch_data['f_kpt_img'][tio.DATA]
+                        moving_img = batch_data['m_img'][tio.DATA]
+                        moving_mask = batch_data['m_mask'][tio.DATA]
+                        moving_kp_img = batch_data['m_kpt_img'][tio.DATA]
+                    elif self.transform_type == "diff":
+                        fixed_img = batch_data[1]['f_img'][tio.DATA]
+                        fixed_mask = batch_data[1]['f_mask'][tio.DATA]
+                        fixed_kp_img = batch_data[1]['f_kpt_img'][tio.DATA]
+                        moving_img = batch_data[0]['m_img'][tio.DATA]
+                        moving_mask = batch_data[0]['m_mask'][tio.DATA]
+                        moving_kp_img = batch_data[0]['m_kpt_img'][tio.DATA]
+                    
+                    fixed_kp = kpimg2kp(fixed_kp_img)
+                    moving_kp = kpimg2kp(moving_kp_img)
+                    
+                    if self.downsample > 1:
+                        fixed_kp = fixed_kp * self.downsample
+                        moving_kp = moving_kp * self.downsample
+                else:
+                    fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask = batch_data
                 fixed_img, moving_img = fixed_img.float().to(
                     self.device
                 ), moving_img.float().to(self.device)
@@ -261,11 +285,16 @@ class Trainer(baseTrainer):
                     self.device
                 ), moving_mask.float().to(self.device)
 
+                # masked input
+                if self.masked_img:
+                    fixed_img = fixed_img * fixed_mask
+                    moving_img = moving_img * moving_mask
+                
                 # mind feature
                 if self.mind_feature:
                     fixed_mind = mindssc(fixed_img)
                     moving_mind = mindssc(moving_img)
-                    model_input = (fixed_mind, moving_mind)
+                    model_input = (fixed_mind, moving_mind)	
                 else:
                     model_input = (fixed_img, moving_img)
 
@@ -384,13 +413,13 @@ class Trainer(baseTrainer):
                     for l in self.loss:
                         print("\t\t |- {} loss: {:.6f}".format(l, train_all_loss[l]))
 
+
             # update scheduler
             if self.scheduler:
                 self.scheduler.step()
                 scheduler_state_dict = self.scheduler.state_dict()
             else:
                 scheduler_state_dict = {}
-
             train_loss_mean = train_loss_sum / len(train_loader)
             train_sub_loss_mean = {
                 l: loss_value / len(train_loader)
@@ -475,6 +504,11 @@ class Trainer(baseTrainer):
                 fixed_mask, moving_mask = fixed_mask.float().to(
                     self.device
                 ), moving_mask.float().to(self.device)
+                
+		# masked input
+                if self.masked_img:
+                    fixed_img = fixed_img * fixed_mask
+                    moving_img = moving_img * moving_mask
                 
                 # mind feature
                 if self.mind_feature:
@@ -714,6 +748,11 @@ class Trainer(baseTrainer):
                 fixed_mask, moving_mask = fixed_mask.float().to(
                     self.device
                 ), moving_mask.float().to(self.device)
+		
+		# masked input
+                if self.masked_img:
+                    fixed_img = fixed_img * fixed_mask
+                    moving_img = moving_img * moving_mask
 
                 # mind feature
                 if self.mind_feature:
@@ -952,7 +991,7 @@ class Trainer(baseTrainer):
         results = pd.concat([results, results_sub_loss], axis=0)
 
         return results
-
+    
     @staticmethod
     def __compute_metrics(
         D_rf, fixed_kp, moving_kp, fixed_mask, moving_mask, warp_mask,
@@ -1025,7 +1064,7 @@ class Trainer(baseTrainer):
             batch_tre.append(tre)
             batch_dice.append(mean_dice)
         return batch_num_foldings, batch_log_jac_det_std, batch_tre, batch_dice
-
+                        
     @staticmethod
     def __compute_loss(
         loss_fn, gt_img, warp_img, gt_mask, warp_mask, fixed_kp, moving_kp, rf, mode="train", downsample=1

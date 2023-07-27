@@ -5,6 +5,7 @@ import pandas as pd
 from argparse import ArgumentParser
 from utils.train_model import Trainer
 from dataset.dataloader import NLSTDataset
+from dataset.data_utils import torch2torchiodataset, augmentations
 from torch.utils.data import DataLoader
 import json
 from utils.train_utils import set_seed, seed_worker
@@ -46,13 +47,41 @@ def argParser():
     parser.add_argument(
         "--kp_dir", type=str, default=None, help="specify customized kp dir"
     )
-    
+    parser.add_argument(
+        "--affine_aug",
+        type=str,
+        default=None,
+        help="affine augmentation on images",
+    )
+    parser.add_argument(
+        "--affine_param",
+        type=float,
+        default=0.035,
+        help="affine transformation parameter",
+    )
+    parser.add_argument(
+        "--augs", 
+        nargs="+",
+        help="list of augs",
+        default=None,
+        type=str,
+    )
+    parser.add_argument(
+        "--transform_type", type=str, default="same", help="same/diff on mov and fixed"
+    )
+
     # feature extraction
     parser.add_argument(
         "--mind_feature",
         action="store_true",
         default=False,
         help="extract mind features for img",
+    )
+    parser.add_argument(
+        "--masked_img",
+        action="store_true",
+        default=False,
+        help="extract masked region only from img",
     )
 
     # model
@@ -205,12 +234,22 @@ def main(args):
 
             if args.mind_feature:
                 exp_name += "_usemind"
+            
+            if args.masked_img:
+                exp_name += "_usemaskedimg"
 
             if args.random_sample:
                 exp_name += f"_rs{args.random_sample}"
 
             if args.kp_dir:
                 exp_name += f"_{args.kp_dir}"
+
+            if args.affine_aug:
+                exp_name += f"_affineaug{args.affine_aug}_param{args.affine_param}"
+
+            if args.augs:
+                exp_name += f"_aug_{'_'.join([aug for aug in args.augs])}_trans{args.transform_type}"
+
 
         exp_dir = os.path.join(args.result_dir, exp_name)
         if not os.path.exists(exp_dir):
@@ -224,6 +263,7 @@ def main(args):
 
         # init model
         model = Trainer(args, mode="train")
+
     # init dataset
     train_dataset = NLSTDataset(
         data_dir=args.data_dir,
@@ -233,7 +273,34 @@ def main(args):
         preprocess=args.preprocess,
         random_sample=args.random_sample,
         kp_dir=args.kp_dir,
+        affine_aug=args.affine_aug,
+        affine_prob=0.5,
+        affine_param=args.affine_param
     )
+
+    if args.augs:
+        print(f"Transferring to TorchIO dataset for {args.augs} augs w. {args.transform_type} type...")
+        aug_process = augmentations(args.augs, p=0.5)
+        # Use TorchIO based subject dataset to apply packaged augmentation
+        train_dataset = torch2torchiodataset(train_dataset, aug_process, transform=args.transform_type, downsample=args.downsample)
+        print("done")
+    
+    # init dataloader
+    if args.transform_type == "diff" and len(train_dataset) == 2:
+        # shuffle should be true to make sure number of keypoints for fixed and moving are the same
+        train_loader_f = DataLoader(train_dataset[1], batch_size=args.batch_size, shuffle=False, num_workers=4, worker_init_fn=seed_worker, pin_memory=True)
+        train_loader_m = DataLoader(train_dataset[0], batch_size=args.batch_size, shuffle=False, num_workers=4, worker_init_fn=seed_worker, pin_memory=True)
+        train_loader = list(zip(train_loader_f, train_loader_m))
+    else:
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=args.batch_size,
+            shuffle=True,
+            num_workers=4,
+            worker_init_fn=seed_worker,
+            pin_memory=True,
+        )
+    
     val_dataset = NLSTDataset(
         data_dir=args.data_dir,
         json_file=args.json_file,
@@ -243,15 +310,6 @@ def main(args):
         random_sample=args.random_sample,
     )
 
-    # init dataloader
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=4,
-        worker_init_fn=seed_worker,
-        pin_memory=True,
-    )
     val_loader = DataLoader(
         val_dataset,
         batch_size=args.batch_size,
