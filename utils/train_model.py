@@ -155,10 +155,16 @@ class baseTrainer:
             )
             print(self.model)
         elif self.model_type == "ResUNet":
-            self.model = ResUNetReg(in_channel=in_channel, n_classes=3, kernel='regular')
+            self.model = ResUNetReg(in_channel=in_channel, n_classes=3, kernel="regular")
             print(self.model)
         elif self.model_type == "UNet":
-            self.model = UNetReg(in_channel=in_channel, n_classes=3, kernel='large', lknorm='instancenorm')
+            self.model = UNetReg(in_channel=in_channel, 
+                                 n_classes=3, 
+                                 kernel="large",
+                                 kernel_dec="regular",
+                                 lknorm="instancenorm", 
+                                 model_type="regular"
+                        )
             print(self.model)
         else:
             raise NotImplementedError
@@ -260,12 +266,12 @@ class Trainer(baseTrainer):
                         moving_mask = batch_data['m_mask'][tio.DATA]
                         moving_kp_img = batch_data['m_kpt_img'][tio.DATA]
                     elif self.transform_type == "diff":
-                        fixed_img = batch_data[1]['f_img'][tio.DATA]
-                        fixed_mask = batch_data[1]['f_mask'][tio.DATA]
-                        fixed_kp_img = batch_data[1]['f_kpt_img'][tio.DATA]
-                        moving_img = batch_data[0]['m_img'][tio.DATA]
-                        moving_mask = batch_data[0]['m_mask'][tio.DATA]
-                        moving_kp_img = batch_data[0]['m_kpt_img'][tio.DATA]
+                        fixed_img = batch_data[0]['f_img'][tio.DATA]
+                        fixed_mask = batch_data[0]['f_mask'][tio.DATA]
+                        fixed_kp_img = batch_data[0]['f_kpt_img'][tio.DATA]
+                        moving_img = batch_data[1]['m_img'][tio.DATA]
+                        moving_mask = batch_data[1]['m_mask'][tio.DATA]
+                        moving_kp_img = batch_data[1]['m_kpt_img'][tio.DATA]
                     
                     fixed_kp = kpimg2kp(fixed_kp_img)
                     moving_kp = kpimg2kp(moving_kp_img)
@@ -301,6 +307,8 @@ class Trainer(baseTrainer):
                 if self.scaler:
                     with torch.cuda.amp.autocast():
                         rf = self.model(model_input[0], model_input[1])
+                        #for weight_id, (name, weight) in reversed(list(enumerate(self.model.named_parameters()))):
+                        #    print(f"{weight_id} {weight.sum().to('cpu').detach().numpy()} {name}")
                         if self.blur:
                             rf = self.blur(rf)
 
@@ -347,6 +355,10 @@ class Trainer(baseTrainer):
                         )
 
                     self.scaler.scale(train_loss).backward()
+                    grad_sum = 0
+                    #for name, weight in self.model.named_parameters():
+                    #    grad_sum += weight.grad.sum().to('cpu').detach().numpy()
+                    #print(grad_sum)
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
                 else:

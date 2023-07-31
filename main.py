@@ -288,8 +288,8 @@ def main(args):
     # init dataloader
     if args.transform_type == "diff" and len(train_dataset) == 2:
         # shuffle should be true to make sure number of keypoints for fixed and moving are the same
-        train_loader_f = DataLoader(train_dataset[1], batch_size=args.batch_size, shuffle=False, num_workers=4, worker_init_fn=seed_worker, pin_memory=True)
-        train_loader_m = DataLoader(train_dataset[0], batch_size=args.batch_size, shuffle=False, num_workers=4, worker_init_fn=seed_worker, pin_memory=True)
+        train_loader_f = DataLoader(train_dataset[0], batch_size=args.batch_size, shuffle=False, num_workers=4, worker_init_fn=seed_worker, pin_memory=True)
+        train_loader_m = DataLoader(train_dataset[1], batch_size=args.batch_size, shuffle=False, num_workers=4, worker_init_fn=seed_worker, pin_memory=True)
         train_loader = list(zip(train_loader_f, train_loader_m))
     else:
         train_loader = DataLoader(
