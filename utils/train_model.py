@@ -13,7 +13,7 @@ from model.lkunet import LKUNet
 from model.resunet import ResUNetReg
 from model.unet import UNetReg
 from model.transform import SpatialTransform, DiffeomorphicTransform, ResizeTransform
-from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE, MINDSSC
+from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MeanDice,  MSE, SAD, TRE, MINDSSC
 from utils.train_utils import EarlyStopping
 from utils.metric_utils import jacobian_determinant, compute_tre, compute_dice
 from utils.feature_utils import mindssc
@@ -132,6 +132,8 @@ class baseTrainer:
                 self.loss_fn[l] = [smoothLoss(), lw]
             elif l == "Dice":
                 self.loss_fn[l] = [Dice(), lw]
+            elif l == "MeanDice":
+                self.loss_fn[l] = [MeanDice(), lw]
             elif l == "MSE":
                 self.loss_fn[l] = [MSE(), lw]
             elif l == "SAD":
@@ -146,7 +148,7 @@ class baseTrainer:
 
     def __init_model(self):
         print(f"Initiate {self.model_type} model", end=" ")
-        in_channel = 24 if self.mind_feature else 2
+        in_channel = 26 if self.mind_feature else 2
 
         if self.model_type == "LKU-Net":
             self.model = LKUNet(
@@ -272,7 +274,11 @@ class Trainer(baseTrainer):
                 moving_kp,
                 fixed_mask,
                 moving_mask,
+                #fixed_mask_totalseg,
+                #moving_mask_totalseg,
+                mask_dict,
             ) in enumerate(train_loader):
+                #eimport pdb; pdb.set_trace()
                 fixed_img, moving_img = fixed_img.float().to(
                     self.device
                 ), moving_img.float().to(self.device)
@@ -282,11 +288,24 @@ class Trainer(baseTrainer):
                 fixed_mask, moving_mask = fixed_mask.float().to(
                     self.device
                 ), moving_mask.float().to(self.device)
+                #fixed_mask_totalseg, moving_mask_totalseg = fixed_mask_totalseg.float().to(
+                #    self.device
+                #), moving_mask_totalseg.float().to(self.device)
+
 
                 # mind feature
                 if self.mind_feature:
+                    #concatenate mind feature to image
+                    #fixed_mind = mindssc(fixed_img)
+                    #moving_mind = mindssc(moving_img)
+                    #fixed_img = torch.cat([fixed_img, fixed_mind], dim=1)
+                    #moving_img = torch.cat([moving_img, moving_mind], dim=1)
+
                     fixed_img = mindssc(fixed_img)
                     moving_img = mindssc(moving_img)
+                    fixed_img = torch.cat([fixed_img,fixed_mask], dim=1) 
+                    moving_img = torch.cat([moving_img,moving_mask], dim=1)
+                    
 
                 if self.scaler:
                     with torch.cuda.amp.autocast():
@@ -322,6 +341,7 @@ class Trainer(baseTrainer):
                             fixed_mask,
                             moving_mask,
                             moving_mask_reg,
+                            labels = [*mask_dict],
                             downsample=self.downsample,
                             mode="train",
                         )
@@ -338,6 +358,7 @@ class Trainer(baseTrainer):
                             fixed_kp,
                             moving_kp,
                             rf,
+                            labels = [*mask_dict],
                             mode="train",
                             downsample=self.downsample,
                         )
@@ -378,6 +399,7 @@ class Trainer(baseTrainer):
                         fixed_mask,
                         moving_mask,
                         moving_mask_reg,
+                        labels = [*mask_dict],
                         downsample=self.downsample,
                         mode="train",
                     )
@@ -395,6 +417,7 @@ class Trainer(baseTrainer):
                         fixed_kp,
                         moving_kp,
                         rf,
+                        labels = [*mask_dict],
                         mode="train",
                         downsample=self.downsample,
                     )
@@ -511,6 +534,9 @@ class Trainer(baseTrainer):
                 moving_kp,
                 fixed_mask,
                 moving_mask,
+                #fixed_mask_totalseg,
+                #moving_mask_totalseg,
+                mask_dict,
             ) in enumerate(val_loader):
                 fixed_img, moving_img = fixed_img.float().to(
                     self.device
@@ -521,11 +547,22 @@ class Trainer(baseTrainer):
                 fixed_mask, moving_mask = fixed_mask.float().to(
                     self.device
                 ), moving_mask.float().to(self.device)
+                #fixed_mask_totalseg, moving_mask_totalseg = fixed_mask_totalseg.float().to(
+                #    self.device
+                #), moving_mask_totalseg.float().to(self.device)
 
                 # mind feature
                 if self.mind_feature:
+                    #concatenate mind feature to image
+                    #fixed_mind = mindssc(fixed_img)
+                    #moving_mind = mindssc(moving_img)
+                    #fixed_img = torch.cat([fixed_img, fixed_mind], dim=1)
+                    #moving_img = torch.cat([moving_img, moving_mind], dim=1)
+
                     fixed_img = mindssc(fixed_img)
                     moving_img = mindssc(moving_img)
+                    fixed_img = torch.cat([fixed_img,fixed_mask], dim=1) 
+                    moving_img = torch.cat([moving_img,moving_mask], dim=1)
 
                 if self.scaler:
                     with torch.cuda.amp.autocast():
@@ -557,6 +594,7 @@ class Trainer(baseTrainer):
                             fixed_kp,
                             moving_kp,
                             rf,
+                            labels=[*mask_dict],
                             mode="val",
                             downsample=self.downsample,
                         )
@@ -591,6 +629,7 @@ class Trainer(baseTrainer):
                         fixed_kp,
                         moving_kp,
                         rf,
+                        labels=[*mask_dict],
                         mode="val",
                         downsample=self.downsample,
                     )
@@ -608,6 +647,7 @@ class Trainer(baseTrainer):
                     fixed_mask,
                     moving_mask,
                     moving_mask_reg,
+                    labels = [*mask_dict],
                     downsample=self.downsample,
                     mode="val",
                 )
@@ -650,6 +690,7 @@ class Trainer(baseTrainer):
                         moving_mask,
                         fixed_mask,
                         fixed_mask_reg,
+                        labels = [*mask_dict],
                         downsample=self.downsample,
                         mode="val",
                     )
@@ -765,6 +806,9 @@ class Trainer(baseTrainer):
                 moving_kp,
                 fixed_mask,
                 moving_mask,
+                #fixed_mask_totalseg,
+                #moving_mask_totalseg,
+                mask_dict,
             ) in enumerate(val_loader):
                 fixed_img, moving_img = fixed_img.float().to(
                     self.device
@@ -775,11 +819,22 @@ class Trainer(baseTrainer):
                 fixed_mask, moving_mask = fixed_mask.float().to(
                     self.device
                 ), moving_mask.float().to(self.device)
+                #fixed_mask_totalseg, moving_mask_totalseg = fixed_mask_totalseg.float().to(
+                #    self.device
+                #), moving_mask_totalseg.float().to(self.device)
 
                 # mind feature
                 if self.mind_feature:
+                    #concatenate mind feature to image
+                    #fixed_mind = mindssc(fixed_img)
+                    #moving_mind = mindssc(moving_img)
+                    #fixed_img = torch.cat([fixed_img, fixed_mind], dim=1)
+                    #moving_img = torch.cat([moving_img, moving_mind], dim=1)
+
                     fixed_img = mindssc(fixed_img)
                     moving_img = mindssc(moving_img)
+                    fixed_img = torch.cat([fixed_img,fixed_mask], dim=1) 
+                    moving_img = torch.cat([moving_img,moving_mask], dim=1)
 
                 if self.scaler:
                     with torch.cuda.amp.autocast():
@@ -811,6 +866,7 @@ class Trainer(baseTrainer):
                             fixed_kp,
                             moving_kp,
                             rf,
+                            labels=[*mask_dict],
                             mode="val",
                             downsample=self.downsample,
                         )
@@ -844,6 +900,7 @@ class Trainer(baseTrainer):
                         fixed_kp,
                         moving_kp,
                         rf,
+                        labels=[*mask_dict],
                         mode="val",
                         downsample=self.downsample,
                     )
@@ -861,6 +918,7 @@ class Trainer(baseTrainer):
                     fixed_mask,
                     moving_mask,
                     moving_mask_reg,
+                    labels = [*mask_dict],
                     downsample=self.downsample,
                     mode="val",
                 )
@@ -903,6 +961,7 @@ class Trainer(baseTrainer):
                         moving_mask,
                         fixed_mask,
                         fixed_mask_reg,
+                        labels = [*mask_dict],
                         downsample=self.downsample,
                         mode="val",
                     )
@@ -1056,6 +1115,7 @@ class Trainer(baseTrainer):
         fixed_mask,
         moving_mask,
         moving_mask_reg,
+        labels = [1],
         downsample=1,
         use_mask="fixed",
         mode="train",
@@ -1129,11 +1189,12 @@ class Trainer(baseTrainer):
                 fixed=fixed_mask[subject_idx].clone().detach().cpu().numpy(),
                 moving=moving_mask[subject_idx].clone().detach().cpu().numpy(),
                 moving_warped=moving_mask_reg[subject_idx]
+                #moving_warped = moving_mask_totalseg[subject_idx]
                 .clone()
                 .detach()
                 .cpu()
                 .numpy(),
-                labels=[1],
+                labels=labels,
             )  # labels is 1 for NLST
             batch_num_foldings.append(num_foldings)
             batch_log_jac_det_std.append(log_jac_det_std)
@@ -1151,6 +1212,7 @@ class Trainer(baseTrainer):
         fixed_kp,
         moving_kp,
         rf,
+        labels = [1],
         mode="train",
         downsample=1,
     ):
@@ -1176,6 +1238,10 @@ class Trainer(baseTrainer):
                 dice_loss = lw[0](fixed_mask, moving_mask_reg) * lw[1]
                 loss += dice_loss
                 all_loss["Dice"] = dice_loss.item()
+            elif l == "MeanDice":
+                dice_loss = lw[0](fixed_mask, moving_mask_reg, labels) * lw[1]
+                loss += dice_loss
+                all_loss["MeanDice"] = dice_loss.item()
             elif l == "MSE":
                 mse_loss = lw[0](fixed_img, moving_reg) * lw[1]
                 loss += mse_loss

@@ -26,6 +26,12 @@ def argParser():
         "--result_dir", type=str, default="./results", help="path to output directory"
     )
     parser.add_argument(
+        "--totalseg_mask_dir", type = str, default = None, help = "path to totalseg mask directory"
+    )
+    parser.add_argument(
+        "--totalseg_organs", nargs="+", help="list of organs", default=["lung"]
+    )#esophagus,heart,pulmonary_artery,rib,trachea,vertebrae,lung
+    parser.add_argument(
         "--exp_name",
         type=str,
         default=None,
@@ -189,9 +195,9 @@ def main(args):
             exp_name = args.exp_name
         else:
             if args.sche:
-                exp_name = f"{args.model_type}_{args.start_channel}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_sche{args.sche}_lrf{args.lrf}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}_wd{args.wd}"
+                exp_name = f"{args.model_type}_{args.start_channel}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_sche{args.sche}_lrf{args.lrf}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}_wd{args.wd}_ds{args.downsample}"
             else:
-                exp_name = f"{args.model_type}_{args.start_channel}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}_wd{args.wd}"
+                exp_name = f"{args.model_type}_{args.start_channel}_{'_'.join([l+str(lw) for l, lw in zip (args.loss,args.loss_weight)])}_{args.opt}_lr{args.lr}_bs{args.batch_size}_ep{args.epochs}_seed{args.seed}_wd{args.wd}_ds{args.downsample}"
 
             if args.freeze:
                 exp_name += f"_freeze{args.freeze}"
@@ -220,6 +226,9 @@ def main(args):
             if args.pretrained:
                 exp_name += f"_pretrained"
 
+            if args.totalseg_mask_dir:
+                exp_name += f"_totalseg_" + "_".join(args.totalseg_organs)
+
         exp_dir = os.path.join(args.result_dir, exp_name)
         if not os.path.exists(exp_dir):
             os.makedirs(exp_dir)
@@ -241,6 +250,8 @@ def main(args):
         preprocess=args.preprocess,
         random_sample=args.random_sample,
         affine_aug=args.affine_aug,
+        totalseg_mask_dir = args.totalseg_mask_dir,
+        totalseg_organs = args.totalseg_organs,
     )
     val_dataset = NLSTDataset(
         data_dir=args.data_dir,
@@ -250,6 +261,8 @@ def main(args):
         preprocess=args.preprocess,
         random_sample=args.random_sample,
         affine_aug=args.affine_aug,
+        totalseg_mask_dir = args.totalseg_mask_dir,
+        totalseg_organs = args.totalseg_organs,
     )
 
     # init dataloader

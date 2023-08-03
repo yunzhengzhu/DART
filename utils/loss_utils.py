@@ -1,3 +1,4 @@
+from typing import Any
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -131,6 +132,16 @@ class Dice:
         bottom = torch.clamp((y_true + y_pred).sum(dim=vol_axes), min=1e-5)
         dice = torch.mean(top / bottom)
         return -dice
+
+#call dice multiple time for each label
+class MeanDice:
+    def __call__(self, y_true, y_pred, labels):
+        dice_loss = Dice()
+        dice_loss_label = []
+        for i in labels:
+            dice_loss_label.append(dice_loss(y_true == i, y_pred == i))
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        return torch.nanmean(torch.tensor(dice_loss_label, requires_grad = True).to(device))
 
 
 class MSE:

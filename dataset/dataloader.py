@@ -9,8 +9,8 @@ import numpy as np
 import scipy
 from typing import Tuple
 from model.transform import AffineTransform
-from affine import Affine
 import random
+from natsort import natsorted 
 
 
 class NLSTDataset(Dataset):
@@ -23,6 +23,8 @@ class NLSTDataset(Dataset):
         preprocess: bool = False,
         random_sample: int = None,
         affine_aug: bool = False,
+        totalseg_mask_dir: str = None,
+        totalseg_organs: list = ["lung"],
     ) -> None:
         self.data_dir = data_dir
         self.json_file = json_file
@@ -31,6 +33,8 @@ class NLSTDataset(Dataset):
         self.preprocess = preprocess
         self.random_sample = random_sample
         self.affine_aug = affine_aug
+        self.totalseg_mask_dir = totalseg_mask_dir
+        self.totalseg_organs = totalseg_organs
 
         # read json file
         with open(os.path.join(data_dir, json_file)) as jf:
@@ -101,6 +105,8 @@ class NLSTDataset(Dataset):
             downsample=self.downsample,
         )  # [None, ...]
 
+
+
         # transform from numpy to torch tensor
         fixed_img = torch.tensor(fixed_img).float()
         moving_img = torch.tensor(moving_img).float()
@@ -108,6 +114,17 @@ class NLSTDataset(Dataset):
         moving_kp = torch.tensor(moving_kp).float()
         fixed_mask = torch.tensor(fixed_mask).float()
         moving_mask = torch.tensor(moving_mask).float()
+
+        # load totalseg mask
+
+        if self.totalseg_mask_dir:
+            fixed_mask_totalseg, moving_mask_totalseg, mask_dict =  self.__load_totalseg_mask(self.totalseg_mask_dir, self.subjects[idx])
+            fixed_mask_totalseg = torch.tensor(fixed_mask_totalseg).float()
+            moving_mask_totalseg = torch.tensor(moving_mask_totalseg).float()
+
+        else:
+            mask_dict = {1:'lung'}
+        
 
         if self.mode == "train":
             # randomly sample keypoints
@@ -119,92 +136,11 @@ class NLSTDataset(Dataset):
                 moving_kp = moving_kp[random_sample_kp, :]
 
             # affine transform
-            if self.affine_aug:
-                # A = torch.randn(3, 4) * 0.035 + torch.eye(3, 4)
-                #only apply translation
-                A = torch.cat(
-                    (
-                        torch.eye(3, 3),
-                        torch.tensor([[random.uniform(-0.1, 0.1), 0, 0]]).t(),
-                    ),
-                    1,
-                )
-                affine = F.affine_grid(
-                    A.unsqueeze(0),
-                    (
-                        1,
-                        1,
-                        self.H // self.downsample,
-                        self.W // self.downsample,
-                        self.D // self.downsample,
-                    ),
-                    align_corners=True,
-                )
-                # normalize kp
-                norm_moving_kp = (
-                    moving_kp
-                    / torch.tensor(
-                        [
-                            self.H // self.downsample,
-                            self.W // self.downsample,
-                            self.D // self.downsample,
-                        ]
-                    )
-                    * 2
-                    - 1
-                ).flip(-1)
+            # remain the original image or do affine transform
+            do_affine = np.random.choice([0, 1], 1)
+            if self.affine_aug and do_affine:
+                moving_img,  moving_kp, moving_mask, moving_mask_totalseg = self.__affine_transform( moving_img,  moving_kp, moving_mask, moving_mask_totalseg)
 
-                # apply affine
-                moving_kp = (
-                    torch.solve(
-                        torch.cat(
-                            (norm_moving_kp, torch.ones(norm_moving_kp.shape[0], 1)), 1
-                        )
-                        .float()
-                        .t(),
-                        torch.cat((A, torch.tensor([0, 0, 0, 1]).view(1, -1)), 0),
-                    )[0]
-                    .t()[:, :3]
-                    .squeeze()
-                )
-
-                # denormalize kp
-                moving_kp = (
-                    (moving_kp + 1)
-                    / 2
-                    * torch.tensor(
-                        [
-                            self.H // self.downsample,
-                            self.W // self.downsample,
-                            self.D // self.downsample,
-                        ]
-                    )
-                ).flip(-1)
-
-                #apply affine to image and mask
-                moving_img = F.grid_sample(
-                    moving_img.view(
-                        1,
-                        1,
-                        self.H // self.downsample,
-                        self.W // self.downsample,
-                        self.D // self.downsample,
-                    ),
-                    affine,
-                    align_corners=True,
-                ).squeeze()
-
-                moving_mask = F.grid_sample(
-                    moving_mask.view(
-                        1,
-                        1,
-                        self.H // self.downsample,
-                        self.W // self.downsample,
-                        self.D // self.downsample,
-                    ),
-                    affine,
-                    align_corners=True,
-                ).squeeze()
 
         fixed_img = fixed_img.unsqueeze(0)
         moving_img = moving_img.unsqueeze(0)
@@ -213,7 +149,12 @@ class NLSTDataset(Dataset):
         fixed_kp = fixed_kp.unsqueeze(0)
         moving_kp = moving_kp.unsqueeze(0)
 
-        return fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask
+        if self.totalseg_mask_dir:
+            #fixed_mask_totalseg = fixed_mask_totalseg.unsqueeze(0)
+            #moving_mask_totalseg = moving_mask_totalseg.unsqueeze(0)
+            return fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask_totalseg, moving_mask_totalseg, mask_dict
+        else:
+            return fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask, mask_dict
 
     @staticmethod
     def __load_nii_img(
@@ -238,3 +179,128 @@ class NLSTDataset(Dataset):
             )
 
         return arr
+
+    def __load_totalseg_mask(self, mask_dir, subject):
+        fixed_mask_dir = os.path.join(mask_dir,subject['fixed'].split('/')[-1].split('.')[0])
+        moving_mask_dir = os.path.join(mask_dir,subject['moving'].split('/')[-1].split('.')[0])
+        all_nifti = natsorted([i.split('.')[0] for i in os.listdir(fixed_mask_dir) if 'nii' in i ])
+        all_nifti = [f for f in all_nifti if any([organ in f for organ in self.totalseg_organs])]
+        fixed_mask_totalseg = np.zeros((1, self.H // self.downsample, self.W // self.downsample, self.D // self.downsample))
+        moving_mask_totalseg = np.zeros((1, self.H // self.downsample, self.W // self.downsample, self.D // self.downsample))
+        mask_dict = {}
+        
+        for submask_idx, nifti in enumerate(all_nifti):
+            fixed_mask_totalseg += (1+submask_idx) * self.__load_nii_img(os.path.join(fixed_mask_dir, nifti+'.nii.gz'), preprocess=False, downsample=self.downsample)
+            moving_mask_totalseg += (1+submask_idx) * self.__load_nii_img(os.path.join(moving_mask_dir, nifti+'.nii.gz'), preprocess=False, downsample=self.downsample)
+            mask_dict[submask_idx+1] = nifti
+        return fixed_mask_totalseg, moving_mask_totalseg, mask_dict
+
+    def __affine_transform(self, moving_img, moving_kp, moving_mask, moving_mask_totalseg):
+        A = torch.cat(
+            (
+                torch.randn(3, 3) * 0.05 + torch.eye(3, 3), #torch.eye(3, 3),
+                torch.tensor(
+                    [
+                        [
+                            random.uniform(-0.1, 0.1), #translation
+                            random.uniform(-0.1, 0.1), 
+                            random.uniform(-0.1, 0.1), 
+                        ]
+                    ]
+                ).t(),
+            ),
+            1,
+        )
+
+        affine = F.affine_grid(
+            A.unsqueeze(0),
+            (
+                1,
+                1,
+                self.H // self.downsample,
+                self.W // self.downsample,
+                self.D // self.downsample,
+            ),
+            align_corners=True,
+        )
+
+        # normalize kp
+        norm_moving_kp = (
+            moving_kp
+            / torch.tensor(
+                [
+                    self.H // self.downsample,
+                    self.W // self.downsample,
+                    self.D // self.downsample,
+                ]
+            )
+            * 2
+            - 1
+        ).flip(-1)
+
+        # apply affine
+        moving_kp = (
+            torch.linalg.solve(
+                torch.cat(
+                    (norm_moving_kp, torch.ones(norm_moving_kp.shape[0], 1)), 1
+                )
+                .float()
+                .t(),
+                torch.cat((A, torch.tensor([0, 0, 0, 1]).view(1, -1)), 0),
+            )[0]
+            .t()[:, :3]
+            .squeeze()
+        )
+
+        # denormalize kp
+        moving_kp = (
+            (moving_kp + 1)
+            / 2
+            * torch.tensor(
+                [
+                    self.H // self.downsample,
+                    self.W // self.downsample,
+                    self.D // self.downsample,
+                ]
+            )
+        ).flip(-1)
+
+        # apply affine to image and mask
+        moving_img = F.grid_sample(
+            moving_img.view(
+                1,
+                1,
+                self.H // self.downsample,
+                self.W // self.downsample,
+                self.D // self.downsample,
+            ),
+            affine,
+            align_corners=True,
+        ).squeeze()
+
+        moving_mask = F.grid_sample(
+            moving_mask.view(
+                1,
+                1,
+                self.H // self.downsample,
+                self.W // self.downsample,
+                self.D // self.downsample,
+            ),
+            affine,
+            align_corners=True,
+        ).squeeze()
+
+        moving_mask_totalseg = F.grid_sample(
+            moving_mask_totalseg.view(
+                1,
+                1,
+                self.H // self.downsample,
+                self.W // self.downsample,
+                self.D // self.downsample,
+            ),
+            affine,
+            align_corners=True,
+        ).squeeze()
+
+
+        return moving_img, moving_kp, moving_mask, moving_mask_totalseg
