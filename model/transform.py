@@ -80,7 +80,7 @@ class SpatialTransform(nn.Module):
         flow_d = flow[:, :, :, :, 0]
         flow_h = flow[:, :, :, :, 1]
         flow_w = flow[:, :, :, :, 2]
-
+        
         # Remove Channel Dimension
         disp_d = (grid_d + (flow_d)).squeeze(1)
         disp_h = (grid_h + (flow_h)).squeeze(1)
@@ -89,7 +89,7 @@ class SpatialTransform(nn.Module):
         warped = F.grid_sample(
             mov_image, sample_grid, mode=mod, align_corners=True
         )
-
+        
         return warped
 
 
@@ -115,7 +115,7 @@ class DiffeomorphicTransform(nn.Module):
         grid_w = nn.Parameter(grid_w, requires_grad=False)
         grid_h = nn.Parameter(grid_h, requires_grad=False)
         flow = flow / (2**self.time_step)
-
+        
         for i in range(self.time_step):
             flow_d = flow[:, 0, :, :, :]
             flow_h = flow[:, 1, :, :, :]

@@ -47,100 +47,129 @@ def extract_range(kpt, win, shape=(224, 192, 224)):
     
 
     
-def keypoint_ncc(img_fixed, img_moving, kpt_fixed, kpt_moving, win_len=9, eps=1e-5, device='cuda', verbose=False):
-    cc_score = []
+def keypoint_score(img_fixed, img_moving, kpt_fixed, kpt_moving, score_metric='tre', win_len=9, eps=1e-5, device='cuda', verbose=False):
+    cc_score, mse_score, tre_score = [], [], []
     for i, (kpt_f, kpt_m) in enumerate(zip(kpt_fixed, kpt_moving)):
         #print(f'Keypoint Fixed {kpt_f} Moving {kpt_m}')
 #     i = 1842
 #     kpt_f, kpt_m = kpt_fixed[i], kpt_moving[i]
-        ndims = 3
-        win = [win_len] * ndims
-        # filter
-        kp_filt = torch.ones([1, 1, *win]).to(device)
+        if score_metric != 'tre':
+            if score_metric == 'lncc' or 'lmse':
+                ndims = 3
+                win = [win_len] * ndims
+                # filter
+                kp_filt = torch.ones([1, 1, *win]).to(device)
+               
+                # keypoint surrounding image
+                kpt_img_fixed = np.zeros(win)
+                fx_min, fx_max, fy_min, fy_max, fz_min, fz_max, fshiftx, fshifty, fshiftz = extract_range(kpt_f, win_len, img_fixed.shape)
+                kpt_img_fixed = img_fixed[fx_min+fshiftx:fx_max+fshiftx+1, fy_min+fshifty:fy_max+fshifty+1, fz_min+fshiftz:fz_max+fshiftz+1]
 
-        # keypoint surrounding image
-        kpt_img_fixed = np.zeros(win)
-        fx_min, fx_max, fy_min, fy_max, fz_min, fz_max, fshiftx, fshifty, fshiftz = extract_range(kpt_f, win_len, img_fixed.shape)
-        kpt_img_fixed = img_fixed[fx_min+fshiftx:fx_max+fshiftx+1, fy_min+fshifty:fy_max+fshifty+1, fz_min+fshiftz:fz_max+fshiftz+1]
+            #         display(
+            #             img_fixed, 
+            #             slice_num=kpt_f,
+            #             title=['fixed_img']*3
+            #         )
+                if verbose:
+                    display(
+                        keypoints_img(img_fixed, 
+                                      kpt_fixed,
+                                      kp_id=i)[0],
+                        slice_num=kpt_f,
+                        title=['fixed_kp']*3
+                    )
 
-    #         display(
-    #             img_fixed, 
-    #             slice_num=kpt_f,
-    #             title=['fixed_img']*3
-    #         )
-        if verbose:
-            display(
-                keypoints_img(img_fixed, 
-                              kpt_fixed,
-                              kp_id=i)[0],
-                slice_num=kpt_f,
-                title=['fixed_kp']*3
-            )
+                    display(
+                        kpt_img_fixed,
+                        title=['fixed_kp_win']*3
+                    )
 
-            display(
-                kpt_img_fixed,
-                title=['fixed_kp_win']*3
-            )
+                kpt_img_moving = np.zeros(win)
+                mx_min, mx_max, my_min, my_max, mz_min, mz_max, mshiftx, mshifty, mshiftz = extract_range(kpt_m, win_len, img_moving.shape)
+                kpt_img_moving = img_moving[mx_min+mshiftx:mx_max+mshiftx+1, my_min+mshifty:my_max+mshifty+1, mz_min+mshiftz:mz_max+mshiftz+1]
 
-        kpt_img_moving = np.zeros(win)
-        mx_min, mx_max, my_min, my_max, mz_min, mz_max, mshiftx, mshifty, mshiftz = extract_range(kpt_m, win_len, img_moving.shape)
-        kpt_img_moving = img_moving[mx_min+mshiftx:mx_max+mshiftx+1, my_min+mshifty:my_max+mshifty+1, mz_min+mshiftz:mz_max+mshiftz+1]
+            #         display(
+            #             img_moving, 
+            #             slice_num=kpt_m,
+            #             title=['moving_img']*3
+            #         )
 
-    #         display(
-    #             img_moving, 
-    #             slice_num=kpt_m,
-    #             title=['moving_img']*3
-    #         )
+                if verbose:
+                    display(
+                        keypoints_img(img_moving, 
+                                      kpt_moving,
+                                      kp_id=i)[0],
+                        slice_num=kpt_m,
+                        title=['moving_kp']*3
+                    )
 
-        if verbose:
-            display(
-                keypoints_img(img_moving, 
-                              kpt_moving,
-                              kp_id=i)[0],
-                slice_num=kpt_m,
-                title=['moving_kp']*3
-            )
+                    display(
+                        kpt_img_moving,
+                        title=['moving_kp_win']*3
+                    )
+                I = torch.from_numpy(kpt_img_fixed)[None, None, ...].to(device).to(torch.float32)
+                J = torch.from_numpy(kpt_img_moving)[None, None, ...].to(device).to(torch.float32)
+                weight = kp_filt
+                conv_fn = F.conv3d
 
-            display(
-                kpt_img_moving,
-                title=['moving_kp_win']*3
-            )
-        I = torch.from_numpy(kpt_img_fixed)[None, None, ...].to(device).to(torch.float32)
-        J = torch.from_numpy(kpt_img_moving)[None, None, ...].to(device).to(torch.float32)
-        weight = kp_filt
+                # compute CC squares
+                I2 = I * I
+                J2 = J * J
+                IJ = I * J
 
-        conv_fn = F.conv3d
+                # compute filters
+                # compute local sums via convolution
+                I_sum = conv_fn(I, weight, padding=int(win_len / 2))
+                J_sum = conv_fn(J, weight, padding=int(win_len / 2))
+                I2_sum = conv_fn(I2, weight, padding=int(win_len / 2))
+                J2_sum = conv_fn(J2, weight, padding=int(win_len / 2))
+                IJ_sum = conv_fn(IJ, weight, padding=int(win_len / 2))
+                
+                # compute cross correlation
+                win_size = np.prod(win)
+            elif score_metric == 'gncc' or 'gmse':
+                I = torch.from_numpy(img_fixed)[None, None, ...].to(device).to(torch.float32)
+                J = torch.from_numpy(img_moving)[None, None, ...].to(device).to(torch.float32)
+                
+                # compute CC squares
+                I2 = I * I
+                J2 = J * J
+                IJ = I * J
 
-        # compute CC squares
-        I2 = I * I
-        J2 = J * J
-        IJ = I * J
+                # compute global sums
+                I_sum = torch.sum(I)
+                J_sum = torch.sum(J)
+                I2_sum = torch.sum(I2)
+                J2_sum = torch.sum(J2)
+                IJ_sum = torch.sum(IJ)
 
-        # compute filters
-        # compute local sums via convolution
-        I_sum = conv_fn(I, weight, padding=int(win_len / 2))
-        J_sum = conv_fn(J, weight, padding=int(win_len / 2))
-        I2_sum = conv_fn(I2, weight, padding=int(win_len / 2))
-        J2_sum = conv_fn(J2, weight, padding=int(win_len / 2))
-        IJ_sum = conv_fn(IJ, weight, padding=int(win_len / 2))
+                # compute cross correlation
+                win_size = torch.prod(torch.Tensor([I.shape[-ndims:]]))
+                
+            u_I = I_sum / win_size
+            u_J = J_sum / win_size
 
-        # compute cross correlation
-        win_size = np.prod(win)
+            cross = IJ_sum - u_J * I_sum - u_I * J_sum + u_I * u_J * win_size
+            I_var = I2_sum - 2 * u_I * I_sum + u_I * u_I * win_size
+            J_var = J2_sum - 2 * u_J * J_sum + u_J * u_J * win_size
 
-        u_I = I_sum / win_size
-        u_J = J_sum / win_size
+            cc = cross * cross / (I_var * J_var + eps)
+            ncc = cc.mean().item()
+            #ncc = cc[cc > 0].mean().item()
 
-        cross = IJ_sum - u_J * I_sum - u_I * J_sum + u_I * u_J * win_size
-        I_var = I2_sum - 2 * u_I * I_sum + u_I * u_I * win_size
-        J_var = J2_sum - 2 * u_J * J_sum + u_J * u_J * win_size
+            mse = torch.mean((I - J) ** 2).item()
+        else:
+            ncc = 0
+            mse = 0
+        
+        tre = np.mean((kpt_f - kpt_m) ** 2)
 
-        cc = cross * cross / (I_var * J_var + eps)
-        ncc = cc.mean().item()
-        #ncc = cc[cc > 0].mean().item()
-        #print(f'keypoint {i} ncc: {ncc}')
+        #print(f'keypoint {i} ncc: {ncc} mse: {mse} tre: {tre}')
         cc_score.append(ncc)
+        mse_score.append(mse)
+        tre_score.append(tre)
     
-    return np.array(cc_score)
+    return np.array(cc_score), np.array(mse_score), np.array(tre_score)
 
 
 def __load_nii_img(img_path, preprocess: bool = False, downsample: int = 1) -> np.ndarray:

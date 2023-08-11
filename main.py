@@ -125,11 +125,18 @@ def argParser():
     parser.add_argument("--epochs", type=int, default=100, help="number of epochs")
     parser.add_argument(
         "--max_epoch",
-        type=int,
-        default=100,
+        type=float,
+        default=100.0,
         help="maximum number of epochs for scheduler",
     )
     parser.add_argument("--lrf", type=float, default=None, help="learning rate factor")
+    parser.add_argument(
+        "--milestones",
+        nargs="+",
+        help="list of scheduler milestone epochs",
+        default=[10.0],
+        type=float,
+    )
     parser.add_argument(
         "--es", action="store_true", default=False, help="early stopping"
     )
@@ -199,7 +206,7 @@ def main(args):
 
         # update args
         for key, value in prev_args.items():
-            if key not in ["continue_training", "exp_dir", "epochs"]:
+            if key not in ["continue_training", "exp_dir", "epochs", "sche"]:
                 setattr(args, key, value)
 
         # init model

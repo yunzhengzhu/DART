@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
+import math
 
 class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, groups=[1, 1]):
@@ -69,6 +70,7 @@ class LK_encoder(nn.Module):
         in_channels,
         out_channels,
         kernel_size=5,
+        kernel_size_large=7,
         stride=1,
         padding=2,
         bias=False,
@@ -77,6 +79,7 @@ class LK_encoder(nn.Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
+        self.kernel_size_large = kernel_size_large
         self.padding = padding
         self.stride = stride
         self.bias = bias
@@ -102,6 +105,15 @@ class LK_encoder(nn.Module):
             bias=self.bias,
             norm=self.norm,
         )
+        #self.layer_largelargeKernel = self.encoder_LK_encoder(
+        #    self.in_channels,
+        #    self.out_channels,
+        #    kernel_size=self.kernel_size_large,
+        #    stride=self.stride,
+        #    padding=self.padding+1,
+        #    bias=self.bias,
+        #    norm=self.norm,
+        #)
         self.layer_oneKernel = self.encoder_LK_encoder(
             self.in_channels,
             self.out_channels,
@@ -166,10 +178,12 @@ class LK_encoder(nn.Module):
         # print(self.layer_regularKernel)
         regularKernel = self.layer_regularKernel(inputs)
         largeKernel = self.layer_largeKernel(inputs)
+        #largelargeKernel = self.layer_largelargeKernel(inputs)
         oneKernel = self.layer_oneKernel(inputs)
         # if self.layer_indentity:
+        #outputs = regularKernel + largelargeKernel + largeKernel + oneKernel + inputs
         outputs = regularKernel + largeKernel + oneKernel + inputs
-        # else:
+	# else:
         # outputs = regularKernel + largeKernel + oneKernel
         # if self.batchnorm:
         # outputs = self.layer_batchnorm(self.layer_batchnorm)
@@ -177,8 +191,9 @@ class LK_encoder(nn.Module):
 
 
 class AACN_Layer(nn.Module):
-    def __init__(self, in_channels, k=0.25, v=0.25, kernel_size=3, num_heads=8, image_size=224, inference=False):
+    def __init__(self, in_channels, k=0.25, v=0.25, kernel_size=3, num_heads=8, image_size=(224, 192, 224), positional_encoding=None, inference=False):
         super(AACN_Layer, self).__init__()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.in_channels = in_channels
         self.kernel_size = kernel_size
         self.num_heads = num_heads
@@ -193,24 +208,26 @@ class AACN_Layer(nn.Module):
         
         self.padding = (self.kernel_size - 1) // 2
         
-        self.conv_out = nn.Conv2d(self.in_channels, self.in_channels - self.dv, self.kernel_size, padding=self.padding).to(device)
-        self.kqv_conv = nn.Conv2d(self.in_channels, 2 * self.dk + self.dv, kernel_size=1)
-        self.attn_out = nn.Conv2d(self.dv, self.dv, 1).to(device)
+        self.conv_out = nn.Conv3d(self.in_channels, self.in_channels - self.dv, self.kernel_size, padding=self.padding).to(self.device)
+        self.kqv_conv = nn.Conv3d(self.in_channels, 2 * self.dk + self.dv, kernel_size=1)
+        self.attn_out = nn.Conv3d(self.dv, self.dv, 1).to(self.device)
         
         # Positional encodings
-        self.rel_encoding_h = nn.Parameter(torch.randn((2 * image_size - 1, self.dk // self.num_heads), requires_grad=True))
-        self.rel_encoding_w = nn.Parameter(torch.randn((2 * image_size - 1, self.dk // self.num_heads), requires_grad=True))
-        
+        self.positional_encoding = positional_encoding
+        if self.positional_encoding != None:
+            self.rel_encoding_h = nn.Parameter(torch.randn((2 * image_size[0] - 1, self.dk // self.num_heads), requires_grad=True))
+            self.rel_encoding_w = nn.Parameter(torch.randn((2 * image_size[1] - 1, self.dk // self.num_heads), requires_grad=True))
+            self.rel_encoding_d = nn.Parameter(torch.randn((2 * image_size[2] - 1, self.dk // self.num_heads), requires_grad=True))
         # later access attention weights
         self.inference = inference
         if self.inference:
             self.register_parameter('weights', None)
          
     def forward(self, x):
-        batch_size, _, height, width = x.size()
+        batch_size, _, height, width, depth = x.size()
         dkh = self.dk // self.num_heads
         dvh = self.dv // self.num_heads
-        flatten_hw = lambda x, depth: torch.reshape(x, (batch_size, self.num_heads, height * width, depth))
+        flatten_hwd = lambda x, channel_depth: torch.reshape(x, (batch_size, self.num_heads, height * width * depth, channel_depth))
 
         # Compute q, k, v
         kqv = self.kqv_conv(x)
@@ -218,25 +235,28 @@ class AACN_Layer(nn.Module):
         q = q * (dkh ** -0.5)
         
         # After splitting, shape is [batch_size, num_heads, height, width, dkh or dvh]
-        k = self.split_heads_2d(k, self.num_heads)
-        q = self.split_heads_2d(q, self.num_heads)
-        v = self.split_heads_2d(v, self.num_heads)
+        k = self.split_heads_3d(k, self.num_heads)
+        q = self.split_heads_3d(q, self.num_heads)
+        v = self.split_heads_3d(v, self.num_heads)
         
-        # [batch_size, num_heads, height*width, height*width]
-        qk = torch.matmul(flatten_hw(q, dkh), flatten_hw(k, dkh).transpose(2, 3))
-
-        qr_h, qr_w = self.relative_logits(q)
-        qk += qr_h
-        qk += qr_w
+        # [batch_size, num_heads, height*width*depth, height*width*depth]
+        qk = torch.matmul(flatten_hwd(q, dkh), flatten_hwd(k, dkh).transpose(2, 3))
+       
+        if self.positional_encoding != None:
+            raise NotImplementedError
+            #qr_h, qr_w, qr_d = self.relative_logits(q)
+            #qk += qr_h
+            #qk += qr_w
+            #qk += qr_d
 
         weights = F.softmax(qk, dim=-1)
         
         if self.inference:
             self.weights = nn.Parameter(weights)
             
-        attn_out = torch.matmul(weights, flatten_hw(v, dvh))
-        attn_out = torch.reshape(attn_out, (batch_size, self.num_heads, self.dv // self.num_heads, height, width))
-        attn_out = self.combine_heads_2d(attn_out)
+        attn_out = torch.matmul(weights, flatten_hwd(v, dvh))
+        attn_out = torch.reshape(attn_out, (batch_size, self.num_heads, self.dv // self.num_heads, height, width, depth))
+        attn_out = self.combine_heads_3d(attn_out)
         # Project heads
         attn_out = self.attn_out(attn_out)
         return torch.cat((self.conv_out(x), attn_out), dim=1)
@@ -248,17 +268,31 @@ class AACN_Layer(nn.Module):
         split_inputs = torch.reshape(inputs, ret_shape)
         return split_inputs
     
+    def split_heads_3d(self, inputs, num_heads):
+        batch_size, channel_depth, height, width, depth = inputs.size()
+        ret_shape = (batch_size, num_heads, height, width, depth, channel_depth // num_heads)
+        split_inputs = torch.reshape(inputs, ret_shape)
+        return split_inputs
+    
     # Combine heads (inverse of split heads 2d).
     def combine_heads_2d(self, inputs):
         batch_size, num_heads, depth, height, width = inputs.size()
         ret_shape = (batch_size, num_heads * depth, height, width)
         return torch.reshape(inputs, ret_shape)
     
+    def combine_heads_3d(self, inputs):
+        batch_size, num_heads, channel_depth, height, width, depth = inputs.size()
+        ret_shape = (batch_size, num_heads * channel_depth, height, width, depth)
+        return torch.reshape(inputs, ret_shape)
+    
     # Compute relative logits for both dimensions.
     def relative_logits(self, q):
-        _, num_heads, height, width, dkh = q.size()
-        rel_logits_w = self.relative_logits_1d(q, self.rel_encoding_w, height, width, num_heads,  [0, 1, 2, 4, 3, 5])
-        rel_logits_h = self.relative_logits_1d(torch.transpose(q, 2, 3), self.rel_encoding_h, width, height, num_heads,  [0, 1, 4, 2, 5, 3])
+        _, num_heads, height, width, depth, dkh = q.size()
+        rel_logits_wh = self.relative_logits_1d(q, self.rel_encoding_w, height, width, depth, num_heads,  [0, 1, 2, 4, 3, 5])
+
+        rel_logits_hw = self.relative_logits_1d(torch.transpose(q, 2, 3), self.rel_encoding_h, width, height, num_heads,  [0, 1, 4, 2, 5, 3])
+        
+        #rel_logits_dh = self.relative_logits_1d(q, self.rel_encoding_
         return rel_logits_h, rel_logits_w
     
     # Compute relative logits along one dimenion.
@@ -285,10 +319,10 @@ class AACN_Layer(nn.Module):
         # [batch_size, num_heads*height, L, 2L−1]
         batch_size, num_heads, L, _ = x.size()
         # Pad to shift from relative to absolute indexing.
-        col_pad = torch.zeros((batch_size, num_heads, L, 1)).to(device)
+        col_pad = torch.zeros((batch_size, num_heads, L, 1)).to(self.device)
         x = torch.cat((x, col_pad), dim=3)
         flat_x = torch.reshape(x, (batch_size, num_heads, L * 2 * L))
-        flat_pad = torch.zeros((batch_size, num_heads, L - 1)).to(device)
+        flat_pad = torch.zeros((batch_size, num_heads, L - 1)).to(self.device)
         flat_x_padded = torch.cat((flat_x, flat_pad), dim=2)
         # Reshape and slice out the padded elements.
         final_x = torch.reshape(flat_x_padded, (batch_size, num_heads, L + 1, 2 * L - 1))

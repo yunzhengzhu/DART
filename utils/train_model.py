@@ -22,7 +22,6 @@ from utils.feature_utils import mindssc
 from utils.keypoints_utils import kpimg2kp
 from tensorboardX import SummaryWriter
 
-
 class baseTrainer:
     def __init__(self, args: ArgumentParser, mode: str = "train") -> None:
         self.args = args
@@ -35,6 +34,7 @@ class baseTrainer:
             self.sche_param = {
                 "cosine": {"max_epoch": args.max_epoch},
                 "lambdacosine": {"max_epoch": args.max_epoch, "lr_factor": args.lrf},
+                "multisteplambdacosine": {"max_epoch": args.max_epoch, "lr_factor": args.lrf, "milestones": args.milestones}
             }
         self.batch_size = args.batch_size
         self.seed = args.seed
@@ -58,7 +58,7 @@ class baseTrainer:
         self.masked_img = args.masked_img
         self.transform_type = args.transform_type
         self.use_augs = True if args.augs != None else False
-
+        self.total_epochs = args.epochs
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
        
         self.__init_model()
@@ -90,7 +90,7 @@ class baseTrainer:
         print("...done")
 
     def __init_scheduler(self):
-        if self.sche:
+        if self.sche != None:
             print(f"Initiate {self.sche} scheduler", end=" ")
             if self.sche == "cosine":
                 sche_param = self.sche_param["cosine"]
@@ -106,6 +106,23 @@ class baseTrainer:
                     * (1 - sche_param["lr_factor"])
                     + sche_param["lr_factor"]
                 )
+                self.scheduler = torch.optim.lr_scheduler.LambdaLR(
+                    self.optimizer, lr_lambda=lf
+                )
+            elif self.sche == "multisteplambdacosine":
+                sche_param = self.sche_param["multisteplambdacosine"]
+                def lambda_func(x, firststep_epochs, milestone, lrf):
+                    if x <= milestone:
+                        coef = ((1 + math.cos(x * math.pi / firststep_epochs)) / 2) * (1 - lrf) + lrf
+                    else:
+                        coef = ((1 + math.cos(milestone * math.pi / firststep_epochs)) / 2) * (1 - lrf) + lrf
+                    #print(((1 + math.cos(x * math.pi / firststep_epochs)) / 2) * (1 - lrf))
+                    #print(lrf)
+                    #print(coef)
+                    return coef
+
+                lf = lambda x: lambda_func(x, sche_param["max_epoch"], sche_param["milestones"][0], sche_param["lr_factor"])
+                
                 self.scheduler = torch.optim.lr_scheduler.LambdaLR(
                     self.optimizer, lr_lambda=lf
                 )
@@ -179,7 +196,7 @@ class baseTrainer:
 
         if self.pretrained:
             print("Load pretrained model", end=" ")
-            self.model.load_state_dict(torch.load(self.pretrained, map_location='cuda:0'))
+            self.model.load_state_dict(torch.load(self.pretrained, map_location='cuda:0')["model"])
             print("...done")
 
         self.spatial_transform = SpatialTransform()
@@ -425,13 +442,13 @@ class Trainer(baseTrainer):
                     for l in self.loss:
                         print("\t\t |- {} loss: {:.6f}".format(l, train_all_loss[l]))
 
-
             # update scheduler
             if self.scheduler:
                 self.scheduler.step()
                 scheduler_state_dict = self.scheduler.state_dict()
             else:
                 scheduler_state_dict = {}
+            
             train_loss_mean = train_loss_sum / len(train_loader)
             train_sub_loss_mean = {
                 l: loss_value / len(train_loader)
@@ -689,7 +706,6 @@ class Trainer(baseTrainer):
                     rev_val_log_jac_det_std_mean,
                 )
             )
-            
 
         if self.writer:
             self.writer.add_scalar("val/Total_loss", val_loss_mean, cur)
@@ -1136,7 +1152,8 @@ class Trainer(baseTrainer):
             self.start_epoch = ckpt["epoch"]
             self.model.load_state_dict(ckpt["model"])
             self.optimizer.load_state_dict(ckpt["optimizer"])
-            self.scheduler.load_state_dict(ckpt["scheduler"])
+            if self.scheduler:
+                self.scheduler.load_state_dict(ckpt["scheduler"])
             # self.writer = ckpt['writer']
             self.early_stopping = ckpt["early_stopping"]
         else:
