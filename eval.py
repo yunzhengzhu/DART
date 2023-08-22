@@ -41,6 +41,12 @@ def argParser():
         default=None,
         help="evaluation with blurring",
     )
+    parser.add_argument(
+        "--eval_with_mask",
+        action="store_true",
+        default=False,
+        help="evaluation with predefined masks in training",
+    )
     args = parser.parse_args()
     return args
 
@@ -62,8 +68,26 @@ def main(args):
     model = Trainer(args, mode="eval")
 
     # init dataset
+    if args.eval_with_mask:
+        mask_dir = "masksTr_totalseg_sp1.5flip" #args.mask_dir
+        mask_info = {
+            "organs": ['lung'], #args.organs,
+            "side": ['right'], #args.side,
+            "specific_regions": None, #args.specific_regions,
+        }
+    else:
+        mask_dir = None
+        mask_info = {}
+    
     val_dataset = NLSTDataset(
-        data_dir=args.data_dir, json_file=args.json_file, mode="val", downsample=args.downsample, preprocess=args.preprocess,
+        data_dir=args.data_dir, 
+        json_file=args.json_file, 
+        mode="val", 
+        downsample=args.downsample, 
+        preprocess=args.preprocess,
+        eval_with_mask=args.eval_with_mask,
+        mask_dir=mask_dir,
+        mask_info=mask_info,
     )
 
     # init dataloader

@@ -1,10 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
 
 #### mindssc feature #####
 
-def mindssc(img, delta=1, sigma=0.8):
+def mindssc(img, delta=1, sigma=0.8):#, channel=1):
     # see http://mpheinrich.de/pub/miccai2013_943_mheinrich.pdf for details on the MIND-SSC descriptor
     device = img.device
     dtype = img.dtype
@@ -46,8 +48,19 @@ def mindssc(img, delta=1, sigma=0.8):
     
     #permute to have same ordering as C++ code
     mind = mind[:, torch.Tensor([6, 8, 1, 11, 2, 10, 0, 7, 9, 4, 5, 3]).long(), :, :, :]
-    
+    # mind mean (compress back to 1 channel)
+    #mind = torch.mean(mind, dim=1, keepdim=True)
+    #mind = mind[:, channel:channel+1]
     return mind
+
+def double_mindssc(img, delta=1, sigma=0.8):
+    mind = mindssc(img, delta=1, sigma=0.8) # 1, 12, h, w, d
+        
+    result = mindssc(mind[:, :1], delta=delta, sigma=sigma)
+    for i in range(1, mind.shape[1]):
+        result = torch.cat((result, mindssc(mind[:, i:i+1], delta=delta, sigma=sigma)), 1)
+        
+    return result
 
 def pdist(x, p=2):
     if p==1:
@@ -201,5 +214,27 @@ def knn_graph(kpts, k, include_self=False):
     
     return ind, dist*A, A
 
+def knn_match(kpts1, kpts2, k=1, T=0.03):
+    kpts1 = kpts1.squeeze(0)
+    kpts2 = kpts2.squeeze(0)
+    neighbors = NearestNeighbors(n_neighbors=k, algorithm='auto').fit(kpts1)
+    distances1, indices1 = neighbors.kneighbors(kpts2)
+    distances1 = distances1[:, 0]
+    indices1 = indices1[:, 0]
 
+    neighbors = NearestNeighbors(n_neighbors=k, algorithm='auto').fit(kpts2)
+    distances2, indices2 = neighbors.kneighbors(kpts1)
+    distances2 = distances2[:, 0]
+    indices2 = indices2[:, 0]
+    print(distances1.shape, distances1.max())
+    # threshold
+    pos1 = np.where(distances1 < T)[0]
+    print(pos1, pos1.shape)
+    jud = pos1 - indices2[indices1[pos1]]
+    pos2 = np.where(jud == 0)[0]
+    pos = pos1[pos2]
 
+    kpts1 = kpts1[pos, :][None, ...]
+    kpts2 = kpts2[indices1[pos], :][None, ...]
+
+    return kpts1, kpts2

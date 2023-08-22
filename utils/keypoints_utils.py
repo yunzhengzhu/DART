@@ -192,22 +192,28 @@ def __load_nii_img(img_path, preprocess: bool = False, downsample: int = 1) -> n
 
     return arr
 
-def display(img, slice_num=['mid','mid','mid'], title=['view1', 'view2', 'view3']):
+def display(img, slice_num=['mid','mid','mid'], title=['view1', 'view2', 'view3'], v_range=None):
+    if v_range != None:
+        v_min = v_range[0]
+        v_max = v_range[1]
+    else:
+        v_min = img.min()
+        v_max = img.max()
     if slice_num == ['mid', 'mid', 'mid']:
         slice_num = [img.shape[0]//2, img.shape[1]//2, img.shape[2]//2]
     slice_num = [int(sn) for sn in slice_num]
 
     plt.figure(figsize = (16, 16))
     plt.subplot(1, 3, 1)
-    plt.imshow(img[slice_num[0]], cmap='gray')
+    plt.imshow(img[slice_num[0]], cmap='gray', vmin=v_min, vmax=v_max)
     plt.title(title[0])
 
     plt.subplot(1, 3, 2)
-    plt.imshow(img[:, slice_num[1]], cmap='gray')
+    plt.imshow(img[:, slice_num[1]], cmap='gray', vmin=v_min, vmax=v_max)
     plt.title(title[1])
 
     plt.subplot(1, 3, 3)
-    plt.imshow(img[:, :, slice_num[2]], cmap='gray')
+    plt.imshow(img[:, :, slice_num[2]], cmap='gray', vmin=v_min, vmax=v_max)
     plt.title(title[2])
     plt.show()
 

@@ -54,14 +54,18 @@ def augmentations(augs, p=0.5):
                 )
             )
         elif aug == "flip":
+            # note: the transformation augmentation here are not designed for registration task
+            #       some keypoints will be misaligned if applying this!
             aug_process.append(
                 tio.RandomFlip(
                     p=p,
-                    axes=(0, 1, 2),
-                    flip_probability=0.5,
+                    axes=('LR',),
+                    flip_probability=1.0,
                 )
             )
         elif aug == "swap":
+            # note: the transformation augmentation here are not designed for registration task
+            #       some keypoints will be misaligned if applying this!
             aug_process.append(
                 tio.RandomSwap(
                     p=p,
@@ -85,26 +89,13 @@ def torch2torchiodataset(Dataset, aug_process, transform="same", downsample=1):
         subjects = []
         for i in range(len(Dataset)):
             fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask = Dataset[i]
-            #print(f"Original Keypoints: fixed {fixed_kp.shape} moving {moving_kp.shape}")
-            fixed_kp_img = np.zeros_like(fixed_img)
-            moving_kp_img = np.zeros_like(moving_img)
-            #fixed_kp_img = np.zeros((fixed_img.shape[0], Dataset.H, Dataset.W, Dataset.D))
-            #moving_kp_img = np.zeros((moving_img.shape[0], Dataset.H, Dataset.W, Dataset.D))
-            if downsample > 1:
-                fixed_kp = fixed_kp // downsample
-                moving_kp = moving_kp // downsample
-
-            for kp_id, (f_kp, m_kp) in enumerate(zip(fixed_kp.squeeze().astype(np.int64), moving_kp.squeeze().astype(np.int64))):
-                fixed_kp_img[:, f_kp[0], f_kp[1], f_kp[2]] = kp_id + 1
-                moving_kp_img[:, m_kp[0], m_kp[1], m_kp[2]] = kp_id + 1
-
             subject = tio.Subject(
                 f_img=tio.ScalarImage(tensor=torch.from_numpy(fixed_img)),
                 f_mask=tio.LabelMap(tensor=torch.from_numpy(fixed_mask)),
-                f_kpt_img=tio.LabelMap(tensor=torch.from_numpy(fixed_kp_img)),
+                f_kpt=fixed_kp,
                 m_img=tio.ScalarImage(tensor=torch.from_numpy(moving_img)),
                 m_mask=tio.LabelMap(tensor=torch.from_numpy(moving_mask)),
-                m_kpt_img=tio.LabelMap(tensor=torch.from_numpy(moving_kp_img))
+                m_kpt=moving_kp,
             )
             subjects.append(subject)
         subject_dataset = tio.SubjectsDataset(subjects, transform=tio.Compose(aug_process), load_getitem=False)
@@ -113,24 +104,15 @@ def torch2torchiodataset(Dataset, aug_process, transform="same", downsample=1):
         fixed_subjects, moving_subjects = [], []
         for i in range(len(Dataset)):
             fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask = Dataset[i]
-            #print(f"Original Keypoints: fixed {fixed_kp.shape} moving {moving_kp.shape}")
-            fixed_kp_img = np.zeros_like(fixed_img)
-            moving_kp_img = np.zeros_like(moving_img)
-            if downsample > 1:
-                fixed_kp = fixed_kp // downsample
-                moving_kp = moving_kp // downsample
-            for kp_id, (f_kp, m_kp) in enumerate(zip(fixed_kp.squeeze().astype(np.int64), moving_kp.squeeze().astype(np.int64))):
-                fixed_kp_img[:, f_kp[0], f_kp[1], f_kp[2]] = kp_id + 1
-                moving_kp_img[:, m_kp[0], m_kp[1], m_kp[2]] = kp_id + 1
             fixed_subject = tio.Subject(
                 f_img=tio.ScalarImage(tensor=torch.from_numpy(fixed_img)),
                 f_mask=tio.LabelMap(tensor=torch.from_numpy(fixed_mask)),
-                f_kpt_img=tio.LabelMap(tensor=torch.from_numpy(fixed_kp_img))
+                f_kpt=fixed_kp,
             )
             moving_subject = tio.Subject(
                 m_img=tio.ScalarImage(tensor=torch.from_numpy(moving_img)),
                 m_mask=tio.LabelMap(tensor=torch.from_numpy(moving_mask)),
-                m_kpt_img=tio.LabelMap(tensor=torch.from_numpy(moving_kp_img))
+                m_kpt_img=moving_kp,
             )
             fixed_subjects.append(fixed_subject)
             moving_subjects.append(moving_subject)

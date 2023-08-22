@@ -18,7 +18,7 @@ from model.transform import SpatialTransform, DiffeomorphicTransform, ResizeTran
 from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE, MINDSSC 
 from utils.train_utils import EarlyStopping
 from utils.metric_utils import jacobian_determinant, compute_tre, compute_dice
-from utils.feature_utils import mindssc
+from utils.feature_utils import mindssc, double_mindssc
 from utils.keypoints_utils import kpimg2kp
 from tensorboardX import SummaryWriter
 
@@ -55,9 +55,11 @@ class baseTrainer:
         self.blur_factor = args.blur_factor if mode == "train" else args.eval_blur_factor
         self.es_criterion = args.es_criterion
         self.mind_feature = args.mind_feature
+        self.double_mind_feature = args.double_mind_feature
         self.masked_img = args.masked_img
         self.transform_type = args.transform_type
         self.use_augs = True if args.augs != None else False
+        self.use_texture_mask = True if args.texture_mask_dir else False
         self.total_epochs = args.epochs
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
        
@@ -116,9 +118,6 @@ class baseTrainer:
                         coef = ((1 + math.cos(x * math.pi / firststep_epochs)) / 2) * (1 - lrf) + lrf
                     else:
                         coef = ((1 + math.cos(milestone * math.pi / firststep_epochs)) / 2) * (1 - lrf) + lrf
-                    #print(((1 + math.cos(x * math.pi / firststep_epochs)) / 2) * (1 - lrf))
-                    #print(lrf)
-                    #print(coef)
                     return coef
 
                 lf = lambda x: lambda_func(x, sche_param["max_epoch"], sche_param["milestones"][0], sche_param["lr_factor"])
@@ -164,8 +163,17 @@ class baseTrainer:
 
     def __init_model(self):
         print(f"Initiate {self.model_type} model", end=" ")
-        in_channel = 24 if self.mind_feature else 2
-            
+        if self.mind_feature or self.double_mind_feature:
+            if self.mind_feature and self.double_mind_feature:
+                in_channel = (12 + 12 ** 2) * 2
+            elif not self.mind_feature:
+                in_channel = (12 ** 2) * 2
+            elif not self.double_mind_feature:
+                in_channel = 12 * 2
+        else:
+            in_channel = 2
+        #in_channel = 2 
+        
         if self.model_type == "LKU-Net":
             self.model = LKUNet(
                 in_channel=in_channel, n_classes=3, start_channel=self.start_channel, layer_type='lku'
@@ -180,7 +188,7 @@ class baseTrainer:
                                  kernel="large",
                                  kernel_dec="regular",
                                  lknorm="instancenorm", 
-                                 model_type="regular"
+                                 model_type="regular",
                         )
             print(self.model)
         else:
@@ -278,26 +286,22 @@ class Trainer(baseTrainer):
                     if self.transform_type == "same":
                         fixed_img = batch_data['f_img'][tio.DATA]
                         fixed_mask = batch_data['f_mask'][tio.DATA]
-                        fixed_kp_img = batch_data['f_kpt_img'][tio.DATA]
+                        fixed_kp = batch_data['f_kpt']
                         moving_img = batch_data['m_img'][tio.DATA]
                         moving_mask = batch_data['m_mask'][tio.DATA]
-                        moving_kp_img = batch_data['m_kpt_img'][tio.DATA]
+                        moving_kp = batch_data['m_kpt']
                     elif self.transform_type == "diff":
                         fixed_img = batch_data[0]['f_img'][tio.DATA]
                         fixed_mask = batch_data[0]['f_mask'][tio.DATA]
-                        fixed_kp_img = batch_data[0]['f_kpt_img'][tio.DATA]
+                        fixed_kp_img = batch_data[0]['f_kpt']
                         moving_img = batch_data[1]['m_img'][tio.DATA]
                         moving_mask = batch_data[1]['m_mask'][tio.DATA]
-                        moving_kp_img = batch_data[1]['m_kpt_img'][tio.DATA]
+                        moving_kp_img = batch_data[1]['m_kpt']
                     
-                    fixed_kp = kpimg2kp(fixed_kp_img)
-                    moving_kp = kpimg2kp(moving_kp_img)
-                    
-                    if self.downsample > 1:
-                        fixed_kp = fixed_kp * self.downsample
-                        moving_kp = moving_kp * self.downsample
                 else:
                     fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask = batch_data
+                #print(torch.mean(fixed_kp[:, :, :, 0]).item(), torch.mean(fixed_kp[:, :, :, 1]).item(), torch.mean(fixed_kp[:, :, :, 2]).item())
+                #print(torch.mean(moving_kp[:, :, :, 0]).item(), torch.mean(moving_kp[:, :, :, 1]).item(), torch.mean(moving_kp[:, :, :, 2]).item())
                 fixed_img, moving_img = fixed_img.float().to(
                     self.device
                 ), moving_img.float().to(self.device)
@@ -307,20 +311,28 @@ class Trainer(baseTrainer):
                 fixed_mask, moving_mask = fixed_mask.float().to(
                     self.device
                 ), moving_mask.float().to(self.device)
-
-                # masked input
-                if self.masked_img:
-                    fixed_img = fixed_img * fixed_mask
-                    moving_img = moving_img * moving_mask
-                
+                 
                 # mind feature
-                if self.mind_feature:
-                    fixed_mind = mindssc(fixed_img)
-                    moving_mind = mindssc(moving_img)
-                    model_input = (fixed_mind, moving_mind)	
+                if self.mind_feature or self.double_mind_feature:
+                    if self.mind_feature and self.double_mind_feature:
+                        fixed_mind = torch.cat((mindssc(fixed_img), double_mindssc(fixed_img)), 1)
+                        moving_mind = torch.cat((mindssc(moving_img), double_mindssc(moving_img)), 1)
+                    elif not self.double_mind_feature:    
+                        fixed_mind = mindssc(fixed_img)
+                        moving_mind = mindssc(moving_img)
+                    elif not self.mind_feature:
+                        fixed_mind = double_mindssc(fixed_img)
+                        moving_mind = double_mindssc(moving_img)
+                    if self.masked_img:
+                        fixed_mind = fixed_mind * fixed_mask
+                        moving_mind = moving_mind * moving_mask
+                    model_input = (fixed_mind, moving_mind)
                 else:
+                    if self.masked_img:
+                        fixed_img = fixed_img * fixed_mask
+                        moving_img = moving_img * moving_mask
                     model_input = (fixed_img, moving_img)
-
+                
                 if self.scaler:
                     with torch.cuda.amp.autocast():
                         rf = self.model(model_input[0], model_input[1])
@@ -370,6 +382,8 @@ class Trainer(baseTrainer):
                             mode="train",
                             downsample=self.downsample,
                         )
+
+                            
 
                     self.scaler.scale(train_loss).backward()
                     grad_sum = 0
@@ -534,17 +548,25 @@ class Trainer(baseTrainer):
                     self.device
                 ), moving_mask.float().to(self.device)
                 
-		# masked input
-                if self.masked_img:
-                    fixed_img = fixed_img * fixed_mask
-                    moving_img = moving_img * moving_mask
-                
                 # mind feature
-                if self.mind_feature:
-                    fixed_mind = mindssc(fixed_img)
-                    moving_mind = mindssc(moving_img)
+                if self.mind_feature or self.double_mind_feature:
+                    if self.mind_feature and self.double_mind_feature:
+                        fixed_mind = torch.cat((mindssc(fixed_img), double_mindssc(fixed_img)), 1)
+                        moving_mind = torch.cat((mindssc(moving_img), double_mindssc(moving_img)), 1)
+                    elif not self.double_mind_feature:    
+                        fixed_mind = mindssc(fixed_img)
+                        moving_mind = mindssc(moving_img)
+                    elif not self.mind_feature:
+                        fixed_mind = double_mindssc(fixed_img)
+                        moving_mind = double_mindssc(moving_img)
+                    if self.masked_img:
+                        fixed_mind = fixed_mind * fixed_mask
+                        moving_mind = moving_mind * moving_mask
                     model_input = (fixed_mind, moving_mind)
                 else:
+                    if self.masked_img:
+                        fixed_img = fixed_img * fixed_mask
+                        moving_img = moving_img * moving_mask
                     model_input = (fixed_img, moving_img)
 
                 if self.scaler:
@@ -776,18 +798,26 @@ class Trainer(baseTrainer):
                 fixed_mask, moving_mask = fixed_mask.float().to(
                     self.device
                 ), moving_mask.float().to(self.device)
-		
-		# masked input
-                if self.masked_img:
-                    fixed_img = fixed_img * fixed_mask
-                    moving_img = moving_img * moving_mask
-
+                
                 # mind feature
-                if self.mind_feature:
-                    fixed_mind = mindssc(fixed_img)
-                    moving_mind = mindssc(moving_img)
+                if self.mind_feature or self.double_mind_feature:
+                    if self.mind_feature and self.double_mind_feature:
+                        fixed_mind = torch.cat((mindssc(fixed_img), double_mindssc(fixed_img)), 1)
+                        moving_mind = torch.cat((mindssc(moving_img), double_mindssc(moving_img)), 1)
+                    elif not self.double_mind_feature:    
+                        fixed_mind = mindssc(fixed_img)
+                        moving_mind = mindssc(moving_img)
+                    elif not self.mind_feature:
+                        fixed_mind = double_mindssc(fixed_img)
+                        moving_mind = double_mindssc(moving_img)
+                    if self.masked_img:
+                        fixed_mind = fixed_mind * fixed_mask
+                        moving_mind = moving_mind * moving_mask
                     model_input = (fixed_mind, moving_mind)
                 else:
+                    if self.masked_img:
+                        fixed_img = fixed_img * fixed_mask
+                        moving_img = moving_img * moving_mask
                     model_input = (fixed_img, moving_img)
 
                 if self.scaler:
@@ -911,6 +941,9 @@ class Trainer(baseTrainer):
                 val_loss_sum += val_loss.item()
                 for l, loss_value in val_sub_loss_sum.items():
                     val_sub_loss_sum[l] = loss_value + val_all_loss[l]
+                
+                # masking disp
+                #D_rf = D_rf * fixed_mask
 
                 # save displacement field - need to double check with learn2reg
                 if self.save_df or self.save_warped:

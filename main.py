@@ -42,6 +42,33 @@ def argParser():
         help="preprocess images",
     )
     parser.add_argument(
+        "--mask_dir", type=str, default=None, help="specify customized mask dir"
+    )
+    parser.add_argument(
+        "--organs",
+        nargs="+",
+        help="list of organs",
+        default=None,
+        type=str,
+    ) 
+    parser.add_argument(
+        "--side",
+        nargs="+",
+        help="list of mask sides (left, right)",
+        default=None,
+        type=str,
+    )
+    parser.add_argument(
+        "--specific_regions",
+        type=str,
+        default=None,
+        help="specific regions"
+    )
+    parser.add_argument(
+        "--texture_mask_dir", type=str, default=None, help="specify texture mask dir"
+    )
+
+    parser.add_argument(
         "--random_sample", type=int, default=None, help="# of randomly sampled kp"
     )
     parser.add_argument(
@@ -60,6 +87,44 @@ def argParser():
         help="affine transformation parameter",
     )
     parser.add_argument(
+        "--flip_aug",
+        type=str,
+        default=None,
+        help="flip augmentation on images",
+    )
+    parser.add_argument(
+        "--flip_axis",
+        nargs="+",
+        help="flip axises",
+        default=[1, -1],
+        type=int,
+    )
+    parser.add_argument(
+        "--kp_aug",
+        action="store_true",
+        default=False,
+        help="keypoint augmentation",
+    )
+    parser.add_argument(
+        "--foerstner_kernel",
+        type=int,
+        default=9,
+        help="kernel for foerstner operator",
+    )
+    parser.add_argument(
+        "--foerstner_points",
+        type=int,
+        default=2000,
+        help="number of foerstner points",
+    )
+    parser.add_argument(
+        "--foerstner_thres",
+        type=float,
+        default=0.03,
+        help="threshold for points matching",
+    )
+
+    parser.add_argument(
         "--augs", 
         nargs="+",
         help="list of augs",
@@ -76,6 +141,12 @@ def argParser():
         action="store_true",
         default=False,
         help="extract mind features for img",
+    )
+    parser.add_argument(
+        "--double_mind_feature",
+        action="store_true",
+        default=False,
+        help="extract double mind features for img",
     )
     parser.add_argument(
         "--masked_img",
@@ -245,15 +316,27 @@ def main(args):
             if args.masked_img:
                 exp_name += "_usemaskedimg"
 
+            if args.mask_dir:
+                exp_name += f"_{args.mask_dir}_{args.organs}_{args.side}_{args.specific_regions}"
+
             if args.random_sample:
                 exp_name += f"_rs{args.random_sample}"
 
             if args.kp_dir:
                 exp_name += f"_{args.kp_dir}"
 
+            if args.texture_mask_dir:
+                exp_name += f"_{args.texture_mask_dir}"
+
             if args.affine_aug:
                 exp_name += f"_affineaug{args.affine_aug}_param{args.affine_param}"
+            
+            if args.flip_aug:
+                exp_name += f"_flipaug{args.flip_aug}_param{args.flip_axis}"
 
+            if args.kp_aug:
+                exp_name += f"_kpaug{args.kp_aug}_k{args.foerstner_kernel}_np{args.foerstner_points}_t{args.foerstner_thres}"
+           
             if args.augs:
                 exp_name += f"_aug_{'_'.join([aug for aug in args.augs])}_trans{args.transform_type}"
 
@@ -272,6 +355,23 @@ def main(args):
         model = Trainer(args, mode="train")
 
     # init dataset
+    if args.mask_dir:
+        mask_info = {
+            "organs": args.organs,
+            "side": args.side,
+            "specific_regions": args.specific_regions,
+        }
+    else:
+        mask_info = {}
+    if args.kp_aug:
+        kp_aug_info = {
+            "kernel": args.foerstner_kernel,
+            "num_points": args.foerstner_points,
+            "threshold": args.foerstner_thres,
+        }
+    else:
+        kp_aug_info = {}
+
     train_dataset = NLSTDataset(
         data_dir=args.data_dir,
         json_file=args.json_file,
@@ -280,14 +380,22 @@ def main(args):
         preprocess=args.preprocess,
         random_sample=args.random_sample,
         kp_dir=args.kp_dir,
+        mask_dir=args.mask_dir,
+        mask_info=mask_info,
         affine_aug=args.affine_aug,
         affine_prob=0.5,
-        affine_param=args.affine_param
+        affine_param=args.affine_param,
+        flip_aug=args.flip_aug,
+        flip_prob=0.5,
+        flip_axis=args.flip_axis,
+        kp_aug=args.kp_aug,
+        kp_aug_info=kp_aug_info,
+        texture_mask_dir=args.texture_mask_dir,
     )
-
+    
     if args.augs:
         print(f"Transferring to TorchIO dataset for {args.augs} augs w. {args.transform_type} type...")
-        aug_process = augmentations(args.augs, p=0.5)
+        aug_process = augmentations(args.augs, p=1)
         # Use TorchIO based subject dataset to apply packaged augmentation
         train_dataset = torch2torchiodataset(train_dataset, aug_process, transform=args.transform_type, downsample=args.downsample)
         print("done")
@@ -295,15 +403,15 @@ def main(args):
     # init dataloader
     if args.transform_type == "diff" and len(train_dataset) == 2:
         # shuffle should be true to make sure number of keypoints for fixed and moving are the same
-        train_loader_f = DataLoader(train_dataset[0], batch_size=args.batch_size, shuffle=False, num_workers=4, worker_init_fn=seed_worker, pin_memory=True)
-        train_loader_m = DataLoader(train_dataset[1], batch_size=args.batch_size, shuffle=False, num_workers=4, worker_init_fn=seed_worker, pin_memory=True)
+        train_loader_f = DataLoader(train_dataset[0], batch_size=args.batch_size, shuffle=False, num_workers=1, worker_init_fn=seed_worker, pin_memory=True)
+        train_loader_m = DataLoader(train_dataset[1], batch_size=args.batch_size, shuffle=False, num_workers=1, worker_init_fn=seed_worker, pin_memory=True)
         train_loader = list(zip(train_loader_f, train_loader_m))
     else:
         train_loader = DataLoader(
             train_dataset,
             batch_size=args.batch_size,
             shuffle=True,
-            num_workers=4,
+            num_workers=1,
             worker_init_fn=seed_worker,
             pin_memory=True,
         )
@@ -321,7 +429,7 @@ def main(args):
         val_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=4,
+        num_workers=1,
         pin_memory=True,
     )
 
