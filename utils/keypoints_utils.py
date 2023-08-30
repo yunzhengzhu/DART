@@ -44,9 +44,9 @@ def extract_range(kpt, win, shape=(224, 192, 224)):
         shiftz = (shape[2] - 1) - win//2 - iz
         
     return x_min, x_max, y_min, y_max, z_min, z_max, shiftx, shifty, shiftz
-    
 
-    
+
+
 def keypoint_score(img_fixed, img_moving, kpt_fixed, kpt_moving, score_metric='tre', win_len=9, eps=1e-5, device='cuda', verbose=False):
     cc_score, mse_score, tre_score = [], [], []
     for i, (kpt_f, kpt_m) in enumerate(zip(kpt_fixed, kpt_moving)):

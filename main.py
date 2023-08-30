@@ -42,6 +42,12 @@ def argParser():
         help="preprocess images",
     )
     parser.add_argument(
+        "--orient_stand",
+        action="store_true",
+        default=False,
+        help="orientation standardization on case 208, 260, and 298",
+    )
+    parser.add_argument(
         "--mask_dir", type=str, default=None, help="specify customized mask dir"
     )
     parser.add_argument(
@@ -60,9 +66,10 @@ def argParser():
     )
     parser.add_argument(
         "--specific_regions",
-        type=str,
+        nargs="+",
+        help="list of specific regions",
         default=None,
-        help="specific regions"
+        type=str,
     )
     parser.add_argument(
         "--texture_mask_dir", type=str, default=None, help="specify texture mask dir"
@@ -147,6 +154,19 @@ def argParser():
         action="store_true",
         default=False,
         help="extract double mind features for img",
+    )
+    parser.add_argument(
+        "--multiscale_mind_feature",
+        nargs="+",
+        help="list of downsample resolution (example: [2 2 2 2])",
+        default=None,
+        type=int,
+    )
+    parser.add_argument(
+        "--mind_grad",
+        action="store_true",
+        default=False,
+        help="extract mind gradient features for img",
     )
     parser.add_argument(
         "--masked_img",
@@ -313,6 +333,9 @@ def main(args):
             if args.mind_feature:
                 exp_name += "_usemind"
             
+            if args.mind_grad:
+                exp_name += "_usemindgrad"
+            
             if args.masked_img:
                 exp_name += "_usemaskedimg"
 
@@ -378,6 +401,7 @@ def main(args):
         mode="train",
         downsample=args.downsample,
         preprocess=args.preprocess,
+        orient_stand=args.orient_stand,
         random_sample=args.random_sample,
         kp_dir=args.kp_dir,
         mask_dir=args.mask_dir,

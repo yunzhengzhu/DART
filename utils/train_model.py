@@ -18,7 +18,7 @@ from model.transform import SpatialTransform, DiffeomorphicTransform, ResizeTran
 from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE, MINDSSC 
 from utils.train_utils import EarlyStopping
 from utils.metric_utils import jacobian_determinant, compute_tre, compute_dice
-from utils.feature_utils import mindssc, double_mindssc
+from utils.feature_utils import mindssc, double_mindssc, multiscale_mindssc, mindssc_grad
 from utils.keypoints_utils import kpimg2kp
 from tensorboardX import SummaryWriter
 
@@ -56,6 +56,8 @@ class baseTrainer:
         self.es_criterion = args.es_criterion
         self.mind_feature = args.mind_feature
         self.double_mind_feature = args.double_mind_feature
+        self.multiscale_mind_feature = args.multiscale_mind_feature
+        self.mind_grad = args.mind_grad
         self.masked_img = args.masked_img
         self.transform_type = args.transform_type
         self.use_augs = True if args.augs != None else False
@@ -170,6 +172,10 @@ class baseTrainer:
                 in_channel = (12 ** 2) * 2
             elif not self.double_mind_feature:
                 in_channel = 12 * 2
+        elif self.mind_grad:
+            in_channel = (12 * 3) * 2
+        elif self.multiscale_mind_feature:
+            in_channel = 12 * (len(self.multiscale_mind_feature) + 1) * 2
         else:
             in_channel = 2
         #in_channel = 2 
@@ -317,12 +323,26 @@ class Trainer(baseTrainer):
                     if self.mind_feature and self.double_mind_feature:
                         fixed_mind = torch.cat((mindssc(fixed_img), double_mindssc(fixed_img)), 1)
                         moving_mind = torch.cat((mindssc(moving_img), double_mindssc(moving_img)), 1)
-                    elif not self.double_mind_feature:    
+                    elif not self.double_mind_feature: 
                         fixed_mind = mindssc(fixed_img)
                         moving_mind = mindssc(moving_img)
                     elif not self.mind_feature:
                         fixed_mind = double_mindssc(fixed_img)
                         moving_mind = double_mindssc(moving_img)
+                    if self.masked_img:
+                        fixed_mind = fixed_mind * fixed_mask
+                        moving_mind = moving_mind * moving_mask
+                    model_input = (fixed_mind, moving_mind)
+                elif self.mind_grad:
+                    fixed_feat = mindssc_grad(fixed_img)
+                    moving_feat = mindssc_grad(moving_img)
+                    if self.masked_img:
+                        fixed_feat = fixed_feat * fixed_mask
+                        moving_feat = moving_feat * moving_mask
+                    model_input = (fixed_feat, moving_feat)
+                elif self.multiscale_mind_feature:
+                    fixed_mind = multiscale_mindssc(fixed_img, downsample=self.multiscale_mind_feature)
+                    moving_mind = multiscale_mindssc(moving_img, downsample=self.multiscale_mind_feature)
                     if self.masked_img:
                         fixed_mind = fixed_mind * fixed_mask
                         moving_mind = moving_mind * moving_mask
@@ -559,6 +579,20 @@ class Trainer(baseTrainer):
                     elif not self.mind_feature:
                         fixed_mind = double_mindssc(fixed_img)
                         moving_mind = double_mindssc(moving_img)
+                    if self.masked_img:
+                        fixed_mind = fixed_mind * fixed_mask
+                        moving_mind = moving_mind * moving_mask
+                    model_input = (fixed_mind, moving_mind)
+                elif self.mind_grad:
+                    fixed_feat = mindssc_grad(fixed_img)
+                    moving_feat = mindssc_grad(moving_img)
+                    if self.masked_img:
+                        fixed_feat = fixed_feat * fixed_mask
+                        moving_feat = moving_feat * moving_mask
+                    model_input = (fixed_feat, moving_feat)
+                elif self.multiscale_mind_feature:
+                    fixed_mind = multiscale_mindssc(fixed_img, downsample=self.multiscale_mind_feature)
+                    moving_mind = multiscale_mindssc(moving_img, downsample=self.multiscale_mind_feature)
                     if self.masked_img:
                         fixed_mind = fixed_mind * fixed_mask
                         moving_mind = moving_mind * moving_mask
@@ -810,6 +844,20 @@ class Trainer(baseTrainer):
                     elif not self.mind_feature:
                         fixed_mind = double_mindssc(fixed_img)
                         moving_mind = double_mindssc(moving_img)
+                    if self.masked_img:
+                        fixed_mind = fixed_mind * fixed_mask
+                        moving_mind = moving_mind * moving_mask
+                    model_input = (fixed_mind, moving_mind)
+                elif self.mind_grad:
+                    fixed_feat = mindssc_grad(fixed_img)
+                    moving_feat = mindssc_grad(moving_img)
+                    if self.masked_img:
+                        fixed_feat = fixed_feat * fixed_mask
+                        moving_feat = moving_feat * moving_mask
+                    model_input = (fixed_feat, moving_feat)
+                elif self.multiscale_mind_feature:
+                    fixed_mind = multiscale_mindssc(fixed_img, downsample=self.multiscale_mind_feature)
+                    moving_mind = multiscale_mindssc(moving_img, downsample=self.multiscale_mind_feature)
                     if self.masked_img:
                         fixed_mind = fixed_mind * fixed_mask
                         moving_mind = moving_mind * moving_mask
