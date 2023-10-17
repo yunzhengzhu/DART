@@ -264,6 +264,18 @@ def argParser():
     parser.add_argument(
         "--rev_metric", action="store_true", default=False, help="track reverse metrics"
     )
+    parser.add_argument(
+        "--eval_with_mask",
+        action="store_true",
+        default=False,
+        help="evaluation with predefined masks in training",
+    )
+    parser.add_argument(
+        "--nodule_kp_dir",
+        type=str,
+        default=None,
+        help="path to nodule detection keypoints",
+    )
 
     # continue training if your model is interrupted
     parser.add_argument(
@@ -394,7 +406,7 @@ def main(args):
         }
     else:
         kp_aug_info = {}
-
+    
     train_dataset = NLSTDataset(
         data_dir=args.data_dir,
         json_file=args.json_file,
@@ -447,6 +459,9 @@ def main(args):
         downsample=args.downsample,
         preprocess=args.preprocess,
         random_sample=args.random_sample,
+        eval_with_mask=args.eval_with_mask,
+        mask_dir=args.mask_dir,
+        mask_info=mask_info,
     )
 
     val_loader = DataLoader(
@@ -460,7 +475,7 @@ def main(args):
     # train
     results = model.train(train_loader, val_loader)
 
-    results.to_csv(os.path.join(args.exp_dir, "results.csv"))
+    results.to_csv(os.path.join(args.exp_dir, f"results.csv"))
 
 
 if __name__ == "__main__":

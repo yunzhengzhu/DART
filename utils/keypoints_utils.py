@@ -218,11 +218,10 @@ def display(img, slice_num=['mid','mid','mid'], title=['view1', 'view2', 'view3'
     plt.show()
 
 
-def keypoints_img(img, keypoints, kp_id='all', r=1):
+def keypoints_img(img, keypoints, kp_id='all', r=1, color=[255, 0, 0]):
     #colormap = cm.get_cmap('viridis', 128)
     #p = np.linspace(0, 1, args.num_cluster + args.no_background)
     #color = np.array(colormap(0)) * 255.0
-    color = [255, 0, 0]
     kp_img = img[..., None]
     kp_img = np.tile(kp_img, reps=(1, 1, 1, 3))
     kp_only = np.zeros_like(img)
@@ -239,9 +238,16 @@ def keypoints_img(img, keypoints, kp_id='all', r=1):
                 kp_only[round(kp[0])-r:round(kp[0])+r,
                         round(kp[1])-r:round(kp[1])+r,
                         round(kp[2])-r:round(kp[2])+r] = i + 1
-
     else:
-        if r > 0:
+        if r == 0:
+            kp_img[round(keypoints[kp_id][0]),
+                    round(keypoints[kp_id][1]),
+                    round(keypoints[kp_id][2]), :] = color
+            kp_only[round(keypoints[kp_id][0]),
+                    round(keypoints[kp_id][1]),
+                    round(keypoints[kp_id][2])] = kp_id + 1
+
+        elif r > 0:
             kp_img[round(keypoints[kp_id][0])-r:round(keypoints[kp_id][0])+r,
                     round(keypoints[kp_id][1])-r:round(keypoints[kp_id][1])+r,
                     round(keypoints[kp_id][2])-r:round(keypoints[kp_id][2])+r, :] = color

@@ -84,43 +84,66 @@ def augmentations(augs, p=0.5):
 
 
 
-def torch2torchiodataset(Dataset, aug_process, transform="same", downsample=1):
-    if transform == "same":
+def torch2torchiodataset(Dataset, aug_process, transform="same", downsample=1, mae_pretrain=False):
+    if mae_pretrain:
         subjects = []
         for i in range(len(Dataset)):
-            fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask = Dataset[i]
+            img, kp, mask, multiple_mask, labels = Dataset[i]
             subject = tio.Subject(
-                f_img=tio.ScalarImage(tensor=torch.from_numpy(fixed_img)),
-                f_mask=tio.LabelMap(tensor=torch.from_numpy(fixed_mask)),
-                f_kpt=fixed_kp,
-                m_img=tio.ScalarImage(tensor=torch.from_numpy(moving_img)),
-                m_mask=tio.LabelMap(tensor=torch.from_numpy(moving_mask)),
-                m_kpt=moving_kp,
+                img=tio.ScalarImage(tensor=torch.from_numpy(img)),
+                mask=tio.LabelMap(tensor=torch.from_numpy(mask)),
+                mulmask=tio.LabelMap(tensor=torch.from_numpy(multiple_mask)),
+                kpt=kp,
+                labels=labels,
             )
             subjects.append(subject)
         subject_dataset = tio.SubjectsDataset(subjects, transform=tio.Compose(aug_process), load_getitem=False)
 
-    elif transform == "diff":
-        fixed_subjects, moving_subjects = [], []
-        for i in range(len(Dataset)):
-            fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask = Dataset[i]
-            fixed_subject = tio.Subject(
-                f_img=tio.ScalarImage(tensor=torch.from_numpy(fixed_img)),
-                f_mask=tio.LabelMap(tensor=torch.from_numpy(fixed_mask)),
-                f_kpt=fixed_kp,
+    else:
+        if transform == "same":
+            subjects = []
+            for i in range(len(Dataset)):
+                fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask, fixed_multiple_mask, moving_multiple_mask, labels = Dataset[i]
+                
+                subject = tio.Subject(
+                    f_img=tio.ScalarImage(tensor=torch.from_numpy(fixed_img)),
+                    f_mask=tio.LabelMap(tensor=torch.from_numpy(fixed_mask)),
+                    f_mulmask=tio.LabelMap(tensor=torch.from_numpy(fixed_multiple_mask)),
+                    f_kpt=fixed_kp,
+                    m_img=tio.ScalarImage(tensor=torch.from_numpy(moving_img)),
+                    m_mask=tio.LabelMap(tensor=torch.from_numpy(moving_mask)),
+                    m_mulmask=tio.LabelMap(tensor=torch.from_numpy(moving_multiple_mask)),
+                    m_kpt=moving_kp,
+                    labels=labels,
+                )
+                subjects.append(subject)
+            subject_dataset = tio.SubjectsDataset(subjects, transform=tio.Compose(aug_process), load_getitem=False)
+
+        elif transform == "diff":
+            fixed_subjects, moving_subjects = [], []
+            for i in range(len(Dataset)):
+                fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask, fixed_multiple_mask, moving_multiple_mask, labels = Dataset[i]
+                fixed_subject = tio.Subject(
+                    f_img=tio.ScalarImage(tensor=torch.from_numpy(fixed_img)),
+                    f_mask=tio.LabelMap(tensor=torch.from_numpy(fixed_mask)),
+                    f_mulmask=tio.LabelMap(tensor=torch.from_numpy(fixed_multiple_mask)),
+                    f_kpt=fixed_kp,
+                    labels=labels,
+                )
+                moving_subject = tio.Subject(
+                    m_img=tio.ScalarImage(tensor=torch.from_numpy(moving_img)),
+                    m_mask=tio.LabelMap(tensor=torch.from_numpy(moving_mask)),
+                    m_mulmask=tio.LabelMap(tensor=torch.from_numpy(moving_multiple_mask)),
+                    m_kpt_img=moving_kp,
+                    labels=labels,
+                )
+                fixed_subjects.append(fixed_subject)
+                moving_subjects.append(moving_subject)
+                
+            subject_dataset = (
+                tio.SubjectsDataset(fixed_subjects, transform=tio.Compose(aug_process), load_getitem=False),
+                tio.SubjectsDataset(moving_subjects, transform=tio.Compose(aug_process), load_getitem=False),
             )
-            moving_subject = tio.Subject(
-                m_img=tio.ScalarImage(tensor=torch.from_numpy(moving_img)),
-                m_mask=tio.LabelMap(tensor=torch.from_numpy(moving_mask)),
-                m_kpt_img=moving_kp,
-            )
-            fixed_subjects.append(fixed_subject)
-            moving_subjects.append(moving_subject)
-            
-        subject_dataset = (
-            tio.SubjectsDataset(fixed_subjects, transform=tio.Compose(aug_process), load_getitem=False),
-            tio.SubjectsDataset(moving_subjects, transform=tio.Compose(aug_process), load_getitem=False),
-        )
 
     return subject_dataset
 

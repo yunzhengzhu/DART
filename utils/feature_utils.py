@@ -91,7 +91,7 @@ def double_mindssc(img, delta=1, sigma=0.8):
         
     return result
 
-def multiscale_mindssc(img, delta=1, sigma=0.8, downsample=None):
+def multiscale_mindssc(img, delta=1, sigma=1.0, downsample=None):
     mind = mindssc(img, delta=delta, sigma=sigma)
     
     result = mind.clone()
