@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from model.model_utils import ConvBlock, LK_encoder, AttentionBlock, DeConvBlock, AACN_Layer
 from utils.train_utils import initialize_weights
+from utils.feature_utils import mindssc 
 
 class UNet(nn.Module):
     def __init__(self, in_channel=2, n_classes=3, kernel="regular", kernel_dec="regular", lknorm="batchnorm"):
@@ -226,7 +227,7 @@ class AttentionAugUNet(nn.Module):
                                            'enc9':LK_encoder(1024*16//8//channel_factor,1024*16//8//channel_factor,norm=lknorm,bias=bias_opt),\
                                            'encattaug':AACN_Layer(
                                                1024*16//8//channel_factor, 
-                                               k=0.3125, 
+                                               k=0.25, 
                                                v=0.03125, 
                                                kernel_size=3, 
                                                num_heads=4
@@ -414,13 +415,25 @@ class UNetReg(nn.Module):
         kernel='regular', 
         kernel_dec='regular', 
         lknorm='batchnorm', 
-        model_type='regular'
+        model_type='regular',
+        feature_extractor=False,
+        use_mindssc=False,
     ):
         super().__init__()
+        self.feat_extract = None
+        if feature_extractor:
+            self.feat_extract = ConvBlock(1, 12)
+            in_channel = 12 * 2
+            if use_mindssc:
+                self.feature_extract_mind = use_mindssc
+                in_channel = in_channel * 2
+            else:
+                self.feature_extract_mind = False
+
         if model_type == "regular":
             self.unet = UNet(in_channel=in_channel,
                              n_classes=n_classes,
-                             kernel=kernel, 
+                             kernel=kernel,
                              kernel_dec=kernel_dec,
                              lknorm=lknorm)
         elif model_type == "attention":
@@ -439,6 +452,16 @@ class UNetReg(nn.Module):
         #self.apply(initialize_weights)
 
     def forward(self, x, y):
-        input = torch.cat((x.to(torch.float), y.to(torch.float)), 1)
+        x = x.to(torch.float)
+        y = y.to(torch.float)
+        if self.feat_extract != None:
+            if self.feature_extract_mind:
+                x = torch.cat((self.feat_extract(x), mindssc(x)), 1)
+                y = torch.cat((self.feat_extract(y), mindssc(y)), 1)
+            else:
+                x = self.feat_extract(x)
+                y = self.feat_extract(y)
+        
+        input = torch.cat((x, y), 1)
         output = self.unet(input)
         return output
