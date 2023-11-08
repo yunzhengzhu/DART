@@ -73,7 +73,6 @@ if [ $stage -le -1 ] && [ $stop_stage -ge -1 ]; then
 fi
 
 exp=exp_nearest_mysplit_baseline
-#exp=exp_nearest_mysplit_ft
 if [ $stage -le 0 ] && [ $stop_stage -ge 0 ]; then
         echo 'Experiment Start'
         CUDA_VISIBLE_DEVICES='3' main.py \
@@ -108,35 +107,14 @@ fi
 
 if [ $stage -le 1 ] && [ $stop_stage -ge 1 ]; then
         echo 'Evaluation Start'
- 	nodule_kp_dir=keypoints_nodule_detection
-        nodule_file="all"
  	for part in val test; do
 		CUDA_VISIBLE_DEVICES='0' eval.py \
 			--exp_dir ${exp_dir} \
 			--save_df \
 			--save_warped \
 			--eval_diff \
-			--nodule_kp_dir ${nodule_kp_dir} \
-			--nodule_id ${nodule_file} \
 			--mode ${part}
 	done
-fi
-
-if [ $stage -le 2 ] && [ $stop_stage -ge 2 ]; then
-        echo 'Evaluation on Disp Start'
-	evaluation.py \
-                -i ${exp_dir}/displacement_field_val \
-                -d ${BASE_PATH} \
-                -o ${exp_dir}/l2r_results_val.json \
-                -c ${EVAL_ROOT}/custom_configs/NLST_mysplit82_VAL_evaluation_config.json \
-                -v
-
-        evaluation.py \
-                -i ${exp_dir}/displacement_field_test \
-                -d ${BASE_PATH} \
-                -o ${exp_dir}/l2r_results_test.json \
-                -c ${EVAL_ROOT}/custom_configs/NLST_mysplit82_TEST_evaluation_config.json \
-                -v
-
-        cat ${exp_dir}/l2r_results_test.json | head -19
+			#--nodule_kp_dir ${nodule_kp_dir} \
+			#--nodule_id ${nodule_file} \
 fi
