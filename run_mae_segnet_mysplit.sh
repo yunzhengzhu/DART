@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 export MAIN_ROOT= # LEARN2REG ROOT
 export EVAL_ROOT= # EVAL ROOT
 export PATH=$PWD:$MAIN_ROOT:$MAIN_ROOT/dataset:$MAIN_ROOT/model:$MAIN_ROOT/utils:$EVAL_ROOT:$PATH
@@ -58,7 +57,7 @@ if [ $stage -le -1 ] && [ $stop_stage -ge -1 ]; then
 		--max_epoch 300.0 \
 		--lrf 0.01 \
                 --batch_size 1 \
-                --epochs 300 \
+                --epochs 1 \
                 --seed 1234 \
                 --es \
                 --es_warmup 0 \
@@ -72,11 +71,11 @@ if [ $stage -le -1 ] && [ $stop_stage -ge -1 ]; then
 		#--organs 'lobe' 'trachea_bronchia' 'vessels' \
 fi
 
-exp=exp_nearest_mysplit_baseline
+exp=exp_nearest_mysplit_ft
 if [ $stage -le 0 ] && [ $stop_stage -ge 0 ]; then
         echo 'Experiment Start'
         CUDA_VISIBLE_DEVICES='3' main.py \
-		--pretrained exp_nearest_pt/test/checkpoint.pth.tar \
+		--pretrained exp_nearest_mysplit_pt/test/checkpoint.pth.tar \
 		--data_dir ${BASE_PATH} \
                 --json_file ${json_file} \
                 --result_dir ${exp} \
@@ -95,7 +94,7 @@ if [ $stage -le 0 ] && [ $stop_stage -ge 0 ]; then
 		--max_epoch 300.0 \
 		--lrf 0.01 \
                 --batch_size 1 \
-                --epochs 300 \
+                --epochs 1 \
                 --seed 1234 \
                 --es \
                 --es_warmup 0 \
@@ -107,7 +106,7 @@ fi
 
 if [ $stage -le 1 ] && [ $stop_stage -ge 1 ]; then
         echo 'Evaluation Start'
- 	for part in val test; do
+ 	for part in test; do
 		CUDA_VISIBLE_DEVICES='0' eval.py \
 			--exp_dir ${exp_dir} \
 			--save_df \

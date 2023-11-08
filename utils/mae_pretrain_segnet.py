@@ -11,12 +11,11 @@ import time
 import math
 import nibabel as nib
 from argparse import ArgumentParser
-from model.unet import UNetReg
 from model.mae_pretrain_segnet import MAE_Pretrain_SegNet
-from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE, MINDSSC, kpt_Sim, Seg_MSE
+from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE, MINDSSC, Seg_MSE
 from utils.train_utils import EarlyStopping
 from utils.metric_utils import jacobian_determinant, compute_tre, compute_dice
-from utils.feature_utils import mindssc, double_mindssc, multiscale_mindssc, mindssc_grad
+from utils.feature_utils import mindssc
 from tensorboardX import SummaryWriter
 
 class baseTrainer:

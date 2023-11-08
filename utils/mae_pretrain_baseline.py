@@ -11,7 +11,6 @@ import time
 import math
 import nibabel as nib
 from argparse import ArgumentParser
-from model.unet import UNetReg
 from model.mae_pretrain import MAE_Pretrain_Baseline
 from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE, MINDSSC
 from utils.train_utils import EarlyStopping

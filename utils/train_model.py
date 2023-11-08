@@ -11,15 +11,14 @@ import time
 import math
 import nibabel as nib
 from argparse import ArgumentParser
-from model.unet import UNetReg
-from model.mae_down import MAE_Finetune, MAE_Finetune_Baseline
+from model.mae_down import MAE_Finetune_Baseline
 from model.vxm import Voxelmorph
 from model.vitvnet import ViTVNet
-from model.transform import SpatialTransform, DiffeomorphicTransform, ResizeTransform, thin_plate_dense
+from model.transform import SpatialTransform, DiffeomorphicTransform, ResizeTransform
 from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE, MINDSSC, Seg_MSE 
 from utils.train_utils import EarlyStopping
 from utils.metric_utils import jacobian_determinant, compute_tre, compute_dice, compute_all_tre
-from utils.feature_utils import mindssc, double_mindssc, multiscale_mindssc, mindssc_grad
+from utils.feature_utils import mindssc
 from tensorboardX import SummaryWriter
 
 class baseTrainer:

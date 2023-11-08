@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 export MAIN_ROOT= # LEARN2REG ROOT
 export EVAL_ROOT= # EVAL ROOT
 export PATH=$PWD:$MAIN_ROOT:$MAIN_ROOT/dataset:$MAIN_ROOT/model:$MAIN_ROOT/utils:$EVAL_ROOT:$PATH
@@ -40,7 +39,7 @@ exp=exp_nearest_mysplit_pt
 exp_name='test'
 if [ $stage -le -1 ] && [ $stop_stage -ge -1 ]; then
         echo 'Pretrain Start'
-        CUDA_VISIBLE_DEVICES='2' pretrain_baseline.py \
+        CUDA_VISIBLE_DEVICES='0' pretrain_baseline.py \
 		--data_dir ${BASE_PATH} \
                 --json_file ${json_file} \
                 --result_dir ${exp} \
@@ -58,7 +57,7 @@ if [ $stage -le -1 ] && [ $stop_stage -ge -1 ]; then
 		--max_epoch 300.0 \
 		--lrf 0.01 \
                 --batch_size 1 \
-                --epochs 300 \
+                --epochs 1 \
                 --seed 1234 \
                 --es \
                 --es_warmup 0 \
@@ -72,7 +71,7 @@ exp=exp_nearest_mysplit_baseline
 #exp=exp_nearest_mysplit_ft
 if [ $stage -le 0 ] && [ $stop_stage -ge 0 ]; then
         echo 'Experiment Start'
-        CUDA_VISIBLE_DEVICES='2' main.py \
+        CUDA_VISIBLE_DEVICES='0' main.py \
 		--pretrained exp_nearest_mysplit_pt/test/checkpoint.pth.tar \
 		--data_dir ${BASE_PATH} \
                 --json_file ${json_file} \
@@ -91,7 +90,7 @@ if [ $stage -le 0 ] && [ $stop_stage -ge 0 ]; then
 		--max_epoch 300.0 \
 		--lrf 0.01 \
                 --batch_size 1 \
-                --epochs 300 \
+                --epochs 1 \
 		--diff \
                 --seed 1234 \
                 --es \
@@ -105,7 +104,7 @@ fi
 if [ $stage -le 1 ] && [ $stop_stage -ge 1 ]; then
         echo 'Evaluation Start'
         for part in val test; do
-		CUDA_VISIBLE_DEVICES='3' eval.py \
+		CUDA_VISIBLE_DEVICES='0' eval.py \
 			--exp_dir ${exp_dir} \
 			--save_df \
 			--save_warped \
