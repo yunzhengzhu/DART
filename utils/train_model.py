@@ -11,19 +11,14 @@ import time
 import math
 import nibabel as nib
 from argparse import ArgumentParser
-from model.lkunet import LKUNet
-from model.resunet import ResUNetReg
 from model.unet import UNetReg
-#from model.mae_down import MAE_Finetune, MAE_Finetune_Baseline
-from model.mae_down2 import MAE_Finetune, MAE_Finetune_Baseline
-#from model.vxm import Voxelmorph
-from model.vxm2 import Voxelmorph
-#from model.ViTVNet import ViTVNet
-from model.ViTVNet2 import ViTVNet
-from model.transform import SpatialTransform, DiffeomorphicTransform, ResizeTransform
-from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE, MINDSSC 
+from model.mae_down import MAE_Finetune, MAE_Finetune_Baseline
+from model.vxm import Voxelmorph
+from model.vitvnet import ViTVNet
+from model.transform import SpatialTransform, DiffeomorphicTransform, ResizeTransform, thin_plate_dense
+from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE, MINDSSC, Seg_MSE 
 from utils.train_utils import EarlyStopping
-from utils.metric_utils import jacobian_determinant, compute_tre, compute_dice
+from utils.metric_utils import jacobian_determinant, compute_tre, compute_dice, compute_all_tre
 from utils.feature_utils import mindssc, double_mindssc, multiscale_mindssc, mindssc_grad
 from tensorboardX import SummaryWriter
 
@@ -60,9 +55,6 @@ class baseTrainer:
         self.blur_factor = args.blur_factor if mode == "train" else args.eval_blur_factor
         self.es_criterion = args.es_criterion
         self.mind_feature = args.mind_feature
-        self.double_mind_feature = args.double_mind_feature
-        self.multiscale_mind_feature = args.multiscale_mind_feature
-        self.mind_grad = args.mind_grad
         self.masked_img = args.masked_img
         self.transform_type = args.transform_type
         self.use_augs = True if args.augs != None else False
@@ -155,6 +147,8 @@ class baseTrainer:
                 self.loss_fn[l] = [smoothLoss(), lw]
             elif l == "Dice":
                 self.loss_fn[l] = [Dice(), lw]
+            elif l == "Seg_MSE":
+                self.loss_fn[l] = [Seg_MSE(), lw]
             elif l == "MSE":
                 self.loss_fn[l] = [MSE(), lw]
             elif l == "SAD":
@@ -171,39 +165,12 @@ class baseTrainer:
 
     def __init_model(self):
         print(f"Initiate {self.model_type} model", end=" ")
-        if self.mind_feature or self.double_mind_feature:
-            if self.mind_feature and self.double_mind_feature:
-                in_channel = (12 + 12 ** 2) * 2
-            elif not self.mind_feature:
-                in_channel = (12 ** 2) * 2
-            elif not self.double_mind_feature:
-                in_channel = 12 * 2
-        elif self.mind_grad:
-            in_channel = (12 * 3) * 2
-        elif self.multiscale_mind_feature:
-            in_channel = 12 * (len(self.multiscale_mind_feature) + 1) * 2
+        if self.mind_feature:
+            in_channel = 12 * 2
         else:
             in_channel = 2
-        #in_channel = 2 
         
-        #if self.model_type == "LKU-Net":
-        #    self.model = LKUNet(
-        #        in_channel=in_channel, n_classes=3, start_channel=self.start_channel, layer_type='lku'
-        #    )
-        #    print(self.model)
-        #elif self.model_type == "ResUNet":
-        #    self.model = ResUNetReg(in_channel=in_channel, n_classes=3, kernel="regular")
-        #    print(self.model)
-        if self.model_type == "UNet":
-            self.model = UNetReg(in_channel=in_channel, 
-                                 n_classes=3, 
-                                 kernel="large",
-                                 kernel_dec="regular",
-                                 lknorm="instancenorm", 
-                                 model_type="regular",
-                        )
-            print(self.model)
-        elif self.model_type == "Vxm":
+        if self.model_type == "Vxm":
             self.model = Voxelmorph(in_channels=in_channel)
             print(self.model)
         elif self.model_type == "ViT-V-Net":
@@ -211,12 +178,7 @@ class baseTrainer:
             print(self.model)
         elif self.model_type == "MAE_ViT_Baseline":
             self.model = MAE_Finetune_Baseline(
-                in_channels=in_channel
-            )
-            print(self.model)
-        elif self.model_type == "MAE_ViT":
-            self.model = MAE_Finetune(
-                in_channels=in_channel
+                in_channels=in_channel,
             )
             print(self.model)
         else:
@@ -244,41 +206,14 @@ class baseTrainer:
                     'mae_transformer.conv3d_transpose_seg1.bias'
                 ]
                 for name, param in mae_transformer_weights.items():
-                    if 'Transformer_encoder' in name:
-                        model_dict[name] = param
-                    else:
-                        continue
-                    #if name in no_pt:
-                    #    continue
-                    #else:
+                    #if 'Transformer_encoder' in name:
                     #    model_dict[name] = param
-                #model_dict.update(mae_transformer_weights)
-                self.model.load_state_dict(model_dict)
-                del model_dict, mae_transformer_weights, loaded_weights
-            elif self.model_type == "MAE_ViT":
-                loaded_weights = torch.load(self.pretrained, map_location='cuda:0')["model"]
-                model_dict = self.model.state_dict()
-                mae_transformer_weights = {}
-                mae_transformer_weights = {k: v for k, v in loaded_weights.items() if k in model_dict}
-                assert mae_transformer_weights != {}, "Warning: Weights are not loaded successfully!"
-                no_pt = [
-                    'mae_transformer1.mask_token',
-                    'mae_transformer1.conv3d_transpose.weight',
-                    'mae_transformer1.conv3d_transpose.bias',
-                    'mae_transformer1.conv3d_transpose1.weight',
-                    'mae_transformer1.conv3d_transpose1.bias',
-                    'mae_transformer2.mask_token',
-                    'mae_transformer2.conv3d_transpose.weight',
-                    'mae_transformer2.conv3d_transpose.bias',
-                    'mae_transformer2.conv3d_transpose1.weight',
-                    'mae_transformer2.conv3d_transpose1.bias',
-                ]
-                for name, param in mae_transformer_weights.items():
+                    #else:
+                    #    continue
                     if name in no_pt:
                         continue
                     else:
                         model_dict[name] = param
-                #model_dict.update(mae_transformer_weights)
                 self.model.load_state_dict(model_dict)
                 del model_dict, mae_transformer_weights, loaded_weights
             else: 
@@ -389,9 +324,7 @@ class Trainer(baseTrainer):
                         moving_kp = batch_data[1]['m_kpt']
                         mask_labels = batch_data[0]['labels'][0][0]
                 else:
-                    fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask, fixed_multiple_mask, moving_multiple_mask, mask_labels = batch_data
-                #print(torch.mean(fixed_kp[:, :, :, 0]).item(), torch.mean(fixed_kp[:, :, :, 1]).item(), torch.mean(fixed_kp[:, :, :, 2]).item())
-                #print(torch.mean(moving_kp[:, :, :, 0]).item(), torch.mean(moving_kp[:, :, :, 1]).item(), torch.mean(moving_kp[:, :, :, 2]).item())
+                    fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask, fixed_multiple_mask, moving_multiple_mask, mask_labels, _ = batch_data
                 fixed_img, moving_img = fixed_img.float().to(
                     self.device
                 ), moving_img.float().to(self.device)
@@ -406,30 +339,9 @@ class Trainer(baseTrainer):
                 ), moving_multiple_mask.float().to(self.device)
                  
                 # mind feature
-                if self.mind_feature or self.double_mind_feature:
-                    if self.mind_feature and self.double_mind_feature:
-                        fixed_mind = torch.cat((mindssc(fixed_img), double_mindssc(fixed_img)), 1)
-                        moving_mind = torch.cat((mindssc(moving_img), double_mindssc(moving_img)), 1)
-                    elif not self.double_mind_feature: 
-                        fixed_mind = mindssc(fixed_img)
-                        moving_mind = mindssc(moving_img)
-                    elif not self.mind_feature:
-                        fixed_mind = double_mindssc(fixed_img)
-                        moving_mind = double_mindssc(moving_img)
-                    if self.masked_img:
-                        fixed_mind = fixed_mind * fixed_mask
-                        moving_mind = moving_mind * moving_mask
-                    model_input = (fixed_mind, moving_mind)
-                elif self.mind_grad:
-                    fixed_feat = mindssc_grad(fixed_img)
-                    moving_feat = mindssc_grad(moving_img)
-                    if self.masked_img:
-                        fixed_feat = fixed_feat * fixed_mask
-                        moving_feat = moving_feat * moving_mask
-                    model_input = (fixed_feat, moving_feat)
-                elif self.multiscale_mind_feature:
-                    fixed_mind = multiscale_mindssc(fixed_img, downsample=self.multiscale_mind_feature)
-                    moving_mind = multiscale_mindssc(moving_img, downsample=self.multiscale_mind_feature)
+                if self.mind_feature:
+                    fixed_mind = mindssc(fixed_img)
+                    moving_mind = mindssc(moving_img)
                     if self.masked_img:
                         fixed_mind = fixed_mind * fixed_mask
                         moving_mind = moving_mind * moving_mask
@@ -443,8 +355,6 @@ class Trainer(baseTrainer):
                 if self.scaler:
                     with torch.cuda.amp.autocast():
                         rf = self.model(model_input[0], model_input[1])
-                        #for weight_id, (name, weight) in reversed(list(enumerate(self.model.named_parameters()))):
-                        #    print(f"{weight_id} {weight.sum().to('cpu').detach().numpy()} {name}")
                         if self.blur:
                             rf = self.blur(rf)
 
@@ -493,10 +403,6 @@ class Trainer(baseTrainer):
                             
 
                     self.scaler.scale(train_loss).backward()
-                    #grad_sum = 0
-                    #for name, weight in self.model.named_parameters():
-                    #    grad_sum += weight.grad.sum().to('cpu').detach().numpy()
-                    #print(grad_sum)
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
                 else:
@@ -648,6 +554,7 @@ class Trainer(baseTrainer):
                 fixed_multiple_mask,
                 moving_multiple_mask,
                 mask_labels,
+                _,
             ) in enumerate(val_loader):
                 fixed_img, moving_img = fixed_img.float().to(
                     self.device
@@ -663,30 +570,9 @@ class Trainer(baseTrainer):
                 ), moving_multiple_mask.float().to(self.device)
                 
                 # mind feature
-                if self.mind_feature or self.double_mind_feature:
-                    if self.mind_feature and self.double_mind_feature:
-                        fixed_mind = torch.cat((mindssc(fixed_img), double_mindssc(fixed_img)), 1)
-                        moving_mind = torch.cat((mindssc(moving_img), double_mindssc(moving_img)), 1)
-                    elif not self.double_mind_feature:    
-                        fixed_mind = mindssc(fixed_img)
-                        moving_mind = mindssc(moving_img)
-                    elif not self.mind_feature:
-                        fixed_mind = double_mindssc(fixed_img)
-                        moving_mind = double_mindssc(moving_img)
-                    if self.masked_img:
-                        fixed_mind = fixed_mind * fixed_mask
-                        moving_mind = moving_mind * moving_mask
-                    model_input = (fixed_mind, moving_mind)
-                elif self.mind_grad:
-                    fixed_feat = mindssc_grad(fixed_img)
-                    moving_feat = mindssc_grad(moving_img)
-                    if self.masked_img:
-                        fixed_feat = fixed_feat * fixed_mask
-                        moving_feat = moving_feat * moving_mask
-                    model_input = (fixed_feat, moving_feat)
-                elif self.multiscale_mind_feature:
-                    fixed_mind = multiscale_mindssc(fixed_img, downsample=self.multiscale_mind_feature)
-                    moving_mind = multiscale_mindssc(moving_img, downsample=self.multiscale_mind_feature)
+                if self.mind_feature:
+                    fixed_mind = mindssc(fixed_img)
+                    moving_mind = mindssc(moving_img)
                     if self.masked_img:
                         fixed_mind = fixed_mind * fixed_mask
                         moving_mind = moving_mind * moving_mask
@@ -925,6 +811,7 @@ class Trainer(baseTrainer):
             val_num_foldings, val_log_jac_det_std, val_tre, val_dice = [], [], [], []
             if self.use_nodule_kpt:
                 val_gt_nodule_tre = []
+                val_nodule_all_tre = []
             if self.rev_metric: 
                 rev_val_num_foldings, rev_val_log_jac_det_std, rev_val_tre, rev_val_dice = [], [], [], []
         with torch.no_grad():
@@ -938,6 +825,7 @@ class Trainer(baseTrainer):
                 fixed_multiple_mask,
                 moving_multiple_mask,
                 mask_labels,
+                spline_kp,
             ) in enumerate(val_loader):
                 fixed_img, moving_img = fixed_img.float().to(
                     self.device
@@ -951,32 +839,12 @@ class Trainer(baseTrainer):
                 fixed_multiple_mask, moving_multiple_mask = fixed_multiple_mask.float().to(
                     self.device
                 ), moving_multiple_mask.float().to(self.device)
+                spline_kp = spline_kp.float().to(self.device)
                 
                 # mind feature
-                if self.mind_feature or self.double_mind_feature:
-                    if self.mind_feature and self.double_mind_feature:
-                        fixed_mind = torch.cat((mindssc(fixed_img), double_mindssc(fixed_img)), 1)
-                        moving_mind = torch.cat((mindssc(moving_img), double_mindssc(moving_img)), 1)
-                    elif not self.double_mind_feature:    
-                        fixed_mind = mindssc(fixed_img)
-                        moving_mind = mindssc(moving_img)
-                    elif not self.mind_feature:
-                        fixed_mind = double_mindssc(fixed_img)
-                        moving_mind = double_mindssc(moving_img)
-                    if self.masked_img:
-                        fixed_mind = fixed_mind * fixed_mask
-                        moving_mind = moving_mind * moving_mask
-                    model_input = (fixed_mind, moving_mind)
-                elif self.mind_grad:
-                    fixed_feat = mindssc_grad(fixed_img)
-                    moving_feat = mindssc_grad(moving_img)
-                    if self.masked_img:
-                        fixed_feat = fixed_feat * fixed_mask
-                        moving_feat = moving_feat * moving_mask
-                    model_input = (fixed_feat, moving_feat)
-                elif self.multiscale_mind_feature:
-                    fixed_mind = multiscale_mindssc(fixed_img, downsample=self.multiscale_mind_feature)
-                    moving_mind = multiscale_mindssc(moving_img, downsample=self.multiscale_mind_feature)
+                if self.mind_feature:
+                    fixed_mind = mindssc(fixed_img)
+                    moving_mind = mindssc(moving_img)
                     if self.masked_img:
                         fixed_mind = fixed_mind * fixed_mask
                         moving_mind = moving_mind * moving_mask
@@ -1001,26 +869,14 @@ class Trainer(baseTrainer):
 
                         if self.deblur:
                             D_rf = self.deblur(D_rf)
-                        
+            
+
                         warp_img = self.spatial_transform(
                             fixed_img, D_rf.permute(0, 2, 3, 4, 1)
                         )
                         warp_mask = self.spatial_transform(
                             fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                         )
-                        #if self.mode == "val" or self.mode == "test":
-                        #    val_loss, val_all_loss = self.__compute_loss(
-                        #        self.loss_fn,
-                        #        moving_img,
-                        #        warp_img,
-                        #        moving_mask,
-                        #        warp_mask,
-                        #        fixed_kp,
-                        #        moving_kp,
-                        #        rf,
-                        #        mode=self.mode,
-                        #        downsample=self.downsample,
-                        #    )
                 else:
                     # pass data to model
                     rf = self.model(model_input[0], model_input[1])
@@ -1034,26 +890,13 @@ class Trainer(baseTrainer):
 
                     if self.deblur:
                         D_rf = self.deblur(D_rf)
-                    
+                        
                     warp_img = self.spatial_transform(
                         fixed_img, D_rf.permute(0, 2, 3, 4, 1)
                     )
                     warp_mask = self.spatial_transform(
                         fixed_mask, D_rf.permute(0, 2, 3, 4, 1), mod="nearest"
                     )
-                    #if self.mode == "val" or self.mode == "test": 
-                    #    val_loss, val_all_loss = self.__compute_loss(
-                    #        self.loss_fn,
-                    #        moving_img,
-                    #        warp_img,
-                    #        moving_mask,
-                    #        warp_mask,
-                    #        fixed_kp,
-                    #        moving_kp,
-                    #        rf,
-                    #        mode=self.mode,
-                    #        downsample=self.downsample,
-                    #    )
 
                 # compute metrics
                 if self.mode == "val" or self.mode == "test":
@@ -1074,6 +917,29 @@ class Trainer(baseTrainer):
                             )  # spacing is 1.5 for NLST
                             batch_gt_nodule_tre.append(nodule_tre)
 
+                            # save cases tre
+                            # recover to the shape of original image
+                            tmp_D_rf = D_rf.clone()
+                            H, W, D = tmp_D_rf.shape[2:]
+                            if self.downsample != 1:
+                                tmp_D_rf = F.interpolate(tmp_D_rf, scale_factor=self.downsample, align_corners=True, mode="trilinear")
+
+                            # denormalize the disp (to the scale of training images)
+                            tmp_D_rf = ((tmp_D_rf.permute(0, 2, 3, 4, 1)) * (torch.tensor([D, H, W]).cuda()-1)).flip(-1).float()
+                            tre_all = compute_all_tre(
+                                fix_lms=fixed_kp[subject_idx].clone().detach().cpu().numpy(),
+                                mov_lms=moving_kp[subject_idx].clone().detach().cpu().numpy(),
+                                disp=tmp_D_rf[subject_idx]
+                                .clone()
+                                .detach()
+                                .cpu()
+                                .numpy(),
+                                spacing_fix=(1.5, 1.5, 1.5),
+                                spacing_mov=(1.5, 1.5, 1.5),
+                            )  # spacing is 1.5 for NLST
+                            print(tre_all.tolist()[0])
+                            val_nodule_all_tre.append(tre_all.tolist()[0])
+                    
                     # fwd metrics
                     (
                         batch_num_foldings,
@@ -1129,15 +995,10 @@ class Trainer(baseTrainer):
                         rev_val_tre.extend(rev_batch_tre)
                         rev_val_dice.extend(rev_batch_dice)
 
-                #if self.mode == "val" or self.mode == "test":
-                #    val_loss_sum += val_loss.item()
-                #    for l, loss_value in val_sub_loss_sum.items():
-                #        val_sub_loss_sum[l] = loss_value + val_all_loss[l]
-                
                 # masking disp
                 #D_rf = D_rf * fixed_mask
-
-                # save displacement field - need to double check with learn2reg
+                
+                # save displacement field 
                 if self.save_df or self.save_warped:
                     for iidx, subject in enumerate(
                         val_loader.dataset.subjects[
@@ -1175,17 +1036,12 @@ class Trainer(baseTrainer):
                             warp_img = (warp_img * (500 - (-1000)) + (-1000)).to(torch.int16)
                             aff = np.eye(4) * 1.5
                             aff[3, 3] = 1.0
-                            #aff = np.eye(4)
                             nib.save(nib.Nifti1Image(warp_img.numpy(), aff),
                                     os.path.join(self.exp_dir,save_warped_fn,
                                                  f'warped_{str(subject_id).zfill(4)}_{str(subject_id).zfill(4)}.nii.gz'))
 
 
         if self.mode == "val" or self.mode == "test":
-            #val_loss_mean = val_loss_sum / len(val_loader)
-            #val_sub_loss_mean = {
-            #    l: vsls / len(val_loader) for l, vsls in val_sub_loss_sum.items()
-            #}
             val_num_foldings_mean = np.mean(val_num_foldings)
             val_num_foldings_std = np.std(val_num_foldings)
             val_log_jac_det_std_mean = np.mean(val_log_jac_det_std)
@@ -1207,10 +1063,7 @@ class Trainer(baseTrainer):
                 rev_val_dice_mean = np.mean(rev_val_dice)
                 rev_val_dice_std = np.std(rev_val_dice)
 
-            #print("Final validation Loss : {:.6f}".format(val_loss_mean))
             print("Final validation Result:")
-            #for l, vslm in val_sub_loss_mean.items():
-            #    print("\t\t |- {} loss : {:.6f}".format(l, vslm))
             print(
                 "\t\t(fwd) Dice: {:.6f}({:.6f}); TRE: {:.6f}({:.6f}); NumFold: {:.6f}({:.6f}); LogJacDetStd: {:.6f}({:.6f})".format(
                     val_dice_mean,
@@ -1240,7 +1093,6 @@ class Trainer(baseTrainer):
                 )
 
             # save results
-                        #val_loss_mean,
             results = pd.DataFrame(
                 {
                     f"{self.mode}_mean": [
@@ -1271,6 +1123,15 @@ class Trainer(baseTrainer):
                     index=["gt_nodule_tre"],
                 )
                 results = pd.concat([results, gt_nodule_results], axis=0)
+                for fid in range(len(val_nodule_all_tre)):
+                    all_nodule_tres = pd.DataFrame(
+                        {
+                            f"{self.mode}_case_tre": [val_nodule_all_tre[fid]],
+                        },
+                        index=[f"case{fid}"],
+                    )
+                    results = pd.concat([results, all_nodule_tres], axis=0)
+
             if self.rev_metric:
                 rev_results = pd.DataFrame(
                     {
@@ -1290,9 +1151,7 @@ class Trainer(baseTrainer):
                     },
                     index=["rev_dice", "rev_tre", "rev_num_fold", "rev_log_jac_det_std"],
                 )
-                results = pd.concat([results, rev_results.T], axis=0)
-            #results_sub_loss = pd.DataFrame(val_sub_loss_mean, index=[self.mode]).T
-            #results = pd.concat([results, results_sub_loss], axis=0)
+                results = pd.concat([results, rev_results], axis=0)
 
             return results
     
@@ -1338,7 +1197,7 @@ class Trainer(baseTrainer):
             else:
                 num_foldings = 0
                 log_jac_det_std = 0
-
+                  
             # TRE keypoints
             tre = compute_tre(
                 fix_lms=fixed_kp[subject_idx].clone().detach().cpu().numpy(),
@@ -1351,7 +1210,7 @@ class Trainer(baseTrainer):
                 spacing_fix=(1.5, 1.5, 1.5),
                 spacing_mov=(1.5, 1.5, 1.5),
             )  # spacing is 1.5 for NLST
-           
+          
             # Dice masks
             mean_dice, dice = compute_dice(
                 fixed=fixed_mask[subject_idx].clone().detach().cpu().numpy(),
@@ -1395,6 +1254,14 @@ class Trainer(baseTrainer):
                 dice_loss = lw[0](gt_mask, warp_mask) * lw[1]
                 loss += dice_loss
                 all_loss["Dice"] = dice_loss.item()
+            elif l == "Seg_MSE":
+                assert gt_mask.shape[1] == warp_mask.shape[1]
+                segmse_loss = []
+                for nmask in gt_mask.shape[1]:
+                    this_segmse_loss = lw[0](gt_mask[:, nmask:nmask+1, :, :, :], warp_mask[:, nmask:nmask+1, :, :, :]) * lw[1]
+                    segmse_loss.append(this_segmse_loss.item())
+                    loss += segmse_loss
+                all_loss["Seg_MSE"] = torch.mean(segmse_loss)
             elif l == "MSE":
                 mse_loss = lw[0](gt_img, warp_img) * lw[1]
                 loss += mse_loss

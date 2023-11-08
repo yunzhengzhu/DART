@@ -25,6 +25,7 @@ class NLSTDataset(Dataset):
         kp_dir: str = None,
         nodule_kp_dir: str = None,
         nodule_id: str = None,
+        lm: str = None,
         mask_dir: str = None,
         mask_info: dict = {},
         affine_aug: str = None,
@@ -35,6 +36,7 @@ class NLSTDataset(Dataset):
         flip_axis: list = [1, -1],
         kp_aug: bool = False,
         kp_aug_info: dict = {},
+        use_tps: bool = False,
         eval_with_mask: bool = False,
         texture_mask_dir: str = None,
     ) -> None:
@@ -48,7 +50,9 @@ class NLSTDataset(Dataset):
         self.kp_dir = kp_dir
         self.nodule_kp_dir = nodule_kp_dir
         self.nodule_id = nodule_id
+        self.lm = lm
         self.mask_dir = mask_dir
+        self.use_tps = use_tps
         self.eval_with_mask = eval_with_mask
         if self.mask_dir or self.eval_with_mask:
             self.organs = mask_info["organs"]
@@ -147,20 +151,45 @@ class NLSTDataset(Dataset):
                             delimiter=",",
                         )[None, ...]
 
-
-        ### nodule keypoints ###
+        if self.use_tps:
+            spline_kp = fixed_kp
+        else:
+            spline_kp = np.zeros_like(fixed_kp)
+        ### nodule keypoints #####################################################################################
         if (self.mode == "val" or self.mode == "test") and self.nodule_kp_dir:
             if self.nodule_id == "all":
                 fixed_nodu_kp_dir = os.path.splitext(os.path.splitext(fixed_img_path)[0])[0].replace("imagesTr", self.nodule_kp_dir)
                 moving_nodu_kp_dir = os.path.splitext(os.path.splitext(moving_img_path)[0])[0].replace("imagesTr", self.nodule_kp_dir)
                 fixed_nodu_kp = np.zeros((0, 3))
                 moving_nodu_kp = np.zeros((0, 3))
-                for fl in os.listdir(fixed_nodu_kp_dir):
-                    if 'forward' in fl:
-                        this_fixed_nodu_kp = np.genfromtxt(os.path.join(fixed_nodu_kp_dir, fl), delimiter=",")
-                        fixed_nodu_kp = np.concatenate((fixed_nodu_kp, this_fixed_nodu_kp), axis=0)
-                        this_moving_nodu_kp = np.genfromtxt(os.path.join(moving_nodu_kp_dir, fl), delimiter=",")
-                        moving_nodu_kp = np.concatenate((moving_nodu_kp, this_moving_nodu_kp), axis=0)
+                if self.lm == "nodule_kpt":
+                    for fl in os.listdir(fixed_nodu_kp_dir):
+                        if "forward" in fl:
+                            this_fixed_nodu_kp = np.genfromtxt(os.path.join(fixed_nodu_kp_dir, fl), delimiter=",")
+                            fixed_nodu_kp = np.concatenate((fixed_nodu_kp, this_fixed_nodu_kp), axis=0)
+                            this_moving_nodu_kp = np.genfromtxt(os.path.join(moving_nodu_kp_dir, fl), delimiter=",")
+                            moving_nodu_kp = np.concatenate((moving_nodu_kp, this_moving_nodu_kp), axis=0)
+                elif self.lm == "nodule_center":
+                    if "boxes.json" in os.listdir(fixed_nodu_kp_dir):
+                        fixed_boxes = json.loads(open(os.path.join(fixed_nodu_kp_dir, "boxes.json")).read())["box"]
+                        moving_boxes = json.loads(open(os.path.join(moving_nodu_kp_dir, "boxes.json")).read())["box"]
+                        fixed_boxes_score = json.loads(open(os.path.join(fixed_nodu_kp_dir, "boxes.json")).read())["score"]
+                        moving_boxes_score = json.loads(open(os.path.join(moving_nodu_kp_dir, "boxes.json")).read())["score"]
+                        for bid in range(len(fixed_boxes)):
+                            if fixed_boxes_score[bid] >= 0.8:
+                                this_fixed_nodu_kp = np.array([
+                                    (fixed_boxes[bid][0] + fixed_boxes[bid][0+3])/2,
+                                    (fixed_boxes[bid][1] + fixed_boxes[bid][1+3])/2,
+                                    (fixed_boxes[bid][2] + fixed_boxes[bid][2+3])/2
+                                ])[None, ...]
+                                fixed_nodu_kp = np.concatenate((fixed_nodu_kp, this_fixed_nodu_kp), axis=0)
+                                this_moving_nodu_kp = np.array([
+                                    (moving_boxes[bid][0] + moving_boxes[bid][0+3])/2,
+                                    (moving_boxes[bid][1] + moving_boxes[bid][1+3])/2,
+                                    (moving_boxes[bid][2] + moving_boxes[bid][2+3])/2
+                                ])[None, ...]
+                                moving_nodu_kp = np.concatenate((moving_nodu_kp, this_moving_nodu_kp), axis=0)
+                
                 fixed_nodu_kp = fixed_nodu_kp[None, ...]
                 moving_nodu_kp = moving_nodu_kp[None, ...]
             else:
@@ -177,7 +206,9 @@ class NLSTDataset(Dataset):
                         print(f"nodule file {moving_nodu_kp_path} does not exist!")
                     fixed_nodu_kp = np.zeros((0, 3))[None, ...]
                     moving_nodu_kp = np.zeros((0, 3))[None, ...]
-        
+        #############################################################################################################
+
+
         if self.texture_mask_dir:
             # texture mask
             fixed_texture_mask = self.__load_nii_img(
@@ -402,11 +433,11 @@ class NLSTDataset(Dataset):
                 moving_kp = np.concatenate((moving_kp, moving_kp_aug_match), axis=1)
                 
                 print(fixed_kp.shape, moving_kp.shape)
-      
+     
         if self.nodule_kp_dir:
-            return fixed_img, moving_img, fixed_nodu_kp, moving_nodu_kp, fixed_mask, moving_mask, fixed_multiple_mask, moving_multiple_mask, labels
+            return fixed_img, moving_img, fixed_nodu_kp, moving_nodu_kp, fixed_mask, moving_mask, fixed_multiple_mask, moving_multiple_mask, labels, spline_kp
         else:
-            return fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask, fixed_multiple_mask, moving_multiple_mask, labels
+            return fixed_img, moving_img, fixed_kp, moving_kp, fixed_mask, moving_mask, fixed_multiple_mask, moving_multiple_mask, labels, spline_kp
 
 
     def __standardize_orientation(self, img, mask, multiple_mask, kp, flip_axis):
@@ -700,8 +731,11 @@ class NLSTDataset_MAEPretrain_Baseline(Dataset):
                 side = self.subjects[idx]["side"]
             else:
                 side = self.side
-                  
+            
             mask, multiple_mask, labels = self.__load_mask_dir(img_path, side=side)
+            #multiple_mask = np.zeros((1, self.H // self.downsample, self.W // self.downsample, self.D // self.downsample))
+            #mask = np.zeros((1, self.H // self.downsample, self.W // self.downsample, self.D // self.downsample))
+            #labels = []
             #print(multiple_mask.shape)
             #print(labels)
             if self.texture_mask_dir:

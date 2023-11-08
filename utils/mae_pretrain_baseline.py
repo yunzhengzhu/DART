@@ -11,15 +11,12 @@ import time
 import math
 import nibabel as nib
 from argparse import ArgumentParser
-from model.lkunet import LKUNet
-from model.resunet import ResUNetReg
 from model.unet import UNetReg
-#from model.mae_pretrain import MAE_Pretrain_Baseline
-from model.mae_pretrain2 import MAE_Pretrain_Baseline, MAE_Pretrain_HybridNet
+from model.mae_pretrain import MAE_Pretrain_Baseline
 from utils.loss_utils import smoothLoss, NCC, GNCC, Dice, MSE, SAD, TRE, MINDSSC
 from utils.train_utils import EarlyStopping
 from utils.metric_utils import jacobian_determinant, compute_tre, compute_dice
-from utils.feature_utils import mindssc, double_mindssc, multiscale_mindssc, mindssc_grad
+from utils.feature_utils import mindssc
 from tensorboardX import SummaryWriter
 
 class baseTrainer:
@@ -53,9 +50,6 @@ class baseTrainer:
         self.rev_metric = args.rev_metric
         self.es_criterion = args.es_criterion
         self.mind_feature = args.mind_feature
-        self.double_mind_feature = args.double_mind_feature
-        self.multiscale_mind_feature = args.multiscale_mind_feature
-        self.mind_grad = args.mind_grad
         self.masked_img = args.masked_img
         self.transform_type = args.transform_type
         self.use_augs = True if args.augs != None else False
@@ -157,17 +151,8 @@ class baseTrainer:
 
     def __init_model(self):
         print(f"Initiate {self.model_type} model", end=" ")
-        if self.mind_feature or self.double_mind_feature:
-            if self.mind_feature and self.double_mind_feature:
-                in_channel = 12 + 12 ** 2
-            elif not self.mind_feature:
-                in_channel = 12 ** 2
-            elif not self.double_mind_feature:
-                in_channel = 12
-        elif self.mind_grad:
-            in_channel = 12 * 3
-        elif self.multiscale_mind_feature:
-            in_channel = 12 * (len(self.multiscale_mind_feature) + 1)
+        if self.mind_feature:
+            in_channel = 12
         else:
             in_channel = 1
 
@@ -177,12 +162,6 @@ class baseTrainer:
                 in_channels=in_channel
             ) 
 
-            print(self.model)
-        elif self.model_type == "MAE_ViT_Hybrid":
-            self.model = MAE_Pretrain_HybridNet(
-                image_size=(224//self.downsample, 192//self.downsample, 224//self.downsample),
-                in_channels=in_channel
-            )
             print(self.model)
         else:
             raise NotImplementedError
@@ -267,23 +246,8 @@ class Trainer(baseTrainer):
                 multiple_mask = multiple_mask.float().to(self.device)
                 
                 # mind feature
-                if self.mind_feature or self.double_mind_feature:
-                    if self.mind_feature and self.double_mind_feature:
-                        mind = torch.cat((mindssc(img), double_mindssc(img)), 1)
-                    elif not self.double_mind_feature:
-                        mind = mindssc(img)
-                    elif not self.mind_feature:
-                        mind = double_mindssc(img)
-                    if self.masked_img:
-                        mind = mind * mask
-                    model_input = mind
-                elif self.mind_grad:
-                    feat = mindssc_grad(img)
-                    if self.masked_img:
-                        feat = feat * mask
-                    model_input = feat
-                elif self.multiscale_mind_feature:
-                    mind = multiscale_mindssc(img, downsample=self.multiscale_mind_feature)
+                if self.mind_feature:
+                    mind = mindssc(img)
                     if self.masked_img:
                         mind = mind * mask
                     model_input = mind
@@ -408,23 +372,8 @@ class Trainer(baseTrainer):
                 multiple_mask = multiple_mask.float().to(self.device)
                 
                 # mind feature
-                if self.mind_feature or self.double_mind_feature:
-                    if self.mind_feature and self.double_mind_feature:
-                        mind = torch.cat((mindssc(img), double_mindssc(img)), 1)
-                    elif not self.double_mind_feature:    
-                        mind = mindssc(img)
-                    elif not self.mind_feature:
-                        mind = double_mindssc(img)
-                    if self.masked_img:
-                        mind = mind * mask
-                    model_input = mind
-                elif self.mind_grad:
-                    feat = mindssc_grad(img)
-                    if self.masked_img:
-                        feat = feat * mask
-                    model_input = feat
-                elif self.multiscale_mind_feature:
-                    mind = multiscale_mindssc(img, downsample=self.multiscale_mind_feature)
+                if self.mind_feature:
+                    mind = mindssc(img)
                     if self.masked_img:
                         mind = mind * mask
                     model_input = mind
@@ -519,23 +468,8 @@ class Trainer(baseTrainer):
                 multiple_mask = multiple_mask.float().to(self.device)
                 
                 # mind feature
-                if self.mind_feature or self.double_mind_feature:
-                    if self.mind_feature and self.double_mind_feature:
-                        mind = torch.cat((mindssc(img), double_mindssc(img)), 1)
-                    elif not self.double_mind_feature:    
-                        mind = mindssc(img)
-                    elif not self.mind_feature:
-                        mind = double_mindssc(img)
-                    if self.masked_img:
-                        mind = mind * mask
-                    model_input = mind
-                elif self.mind_grad:
-                    feat = mindssc_grad(img)
-                    if self.masked_img:
-                        feat = feat * mask
-                    model_input = feat
-                elif self.multiscale_mind_feature:
-                    mind = multiscale_mindssc(img, downsample=self.multiscale_mind_feature)
+                if self.mind_feature:
+                    mind = mindssc(img)
                     if self.masked_img:
                         mind = mind * mask
                     model_input = mind

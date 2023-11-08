@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import scipy
 import nibabel as nib
 from matplotlib import pyplot as plt
-
+from matplotlib import patches
 def extract_range(kpt, win, shape=(224, 192, 224)):
     ix, iy, iz = kpt
     ix = round(ix)
@@ -192,7 +192,21 @@ def __load_nii_img(img_path, preprocess: bool = False, downsample: int = 1) -> n
 
     return arr
 
-def display(img, slice_num=['mid','mid','mid'], title=['view1', 'view2', 'view3'], v_range=None):
+def display(
+        img, 
+        kpt=None,
+        box=None,
+        slice_num=['mid','mid','mid'], 
+        title=['view1', 'view2', 'view3'], 
+        v_range=None, 
+        cmap='gray',
+        markerandcolor=['r.', 'r.', 'r.'],
+        markersize=[10, 10, 10],
+    ):
+    '''
+    kpt_fixed: (n, 3) 1 - 224, 1 - 192, 1 - 224
+    box: (n, 6) [xl, yl, zl, xr, yr, zr]
+    '''
     if v_range != None:
         v_min = v_range[0]
         v_max = v_range[1]
@@ -202,19 +216,82 @@ def display(img, slice_num=['mid','mid','mid'], title=['view1', 'view2', 'view3'
     if slice_num == ['mid', 'mid', 'mid']:
         slice_num = [img.shape[0]//2, img.shape[1]//2, img.shape[2]//2]
     slice_num = [int(sn) for sn in slice_num]
+    if isinstance(kpt, np.ndarray):
+        kpt = np.round(kpt)
+        pos0 = np.where(kpt[:, 0] == slice_num[0])[0]
+        pos1 = np.where(kpt[:, 1] == slice_num[1])[0]
+        pos2 = np.where(kpt[:, 2] == slice_num[2])[0]
 
+    if isinstance(box, np.ndarray):
+        box = np.round(box)
+        print(box)
     plt.figure(figsize = (16, 16))
     plt.subplot(1, 3, 1)
-    plt.imshow(img[slice_num[0]], cmap='gray', vmin=v_min, vmax=v_max)
+    plt.imshow(img[slice_num[0]], cmap=cmap, vmin=v_min, vmax=v_max)
+    if isinstance(kpt, np.ndarray):
+        plt.plot(
+            kpt[pos0, 2], 
+            kpt[pos0, 1],
+            markerandcolor[0], 
+            markersize=markersize[0]
+        )
+    
+    if isinstance(box, np.ndarray):
+        bounding_box0 = patches.Rectangle(
+            (box[pos0, 2], box[pos0, 1]), 
+            box[pos0, 5] - box[pos0, 2],
+            box[pos0, 4] - box[pos0, 1], 
+            linewidth=1, 
+            edgecolor='r',
+            facecolor='none'
+        )
+        plt.gca().add_patch(bounding_box0)
     plt.title(title[0])
 
     plt.subplot(1, 3, 2)
-    plt.imshow(img[:, slice_num[1]], cmap='gray', vmin=v_min, vmax=v_max)
+    plt.imshow(img[:, slice_num[1]], cmap=cmap, vmin=v_min, vmax=v_max)
+    if isinstance(kpt, np.ndarray):
+        plt.plot(
+            kpt[pos1, 2], 
+            kpt[pos1, 0],
+            markerandcolor[1], 
+            markersize=markersize[1]
+        )
+    
+    if isinstance(box, np.ndarray):
+        bounding_box1 = patches.Rectangle(
+            (box[pos1, 2], box[pos1, 0]), 
+            box[pos1, 5] - box[pos1, 2],
+            box[pos1, 3] - box[pos1, 0], 
+            linewidth=1, 
+            edgecolor='r',
+            facecolor='none'
+        )
+        plt.gca().add_patch(bounding_box1)
     plt.title(title[1])
 
     plt.subplot(1, 3, 3)
-    plt.imshow(img[:, :, slice_num[2]], cmap='gray', vmin=v_min, vmax=v_max)
+    plt.imshow(img[:, :, slice_num[2]], cmap=cmap, vmin=v_min, vmax=v_max)
+    if isinstance(kpt, np.ndarray):
+        plt.plot(
+            kpt[pos2, 1], 
+            kpt[pos2, 0],
+            markerandcolor[2], 
+            markersize=markersize[2]
+        )
+    
+    if isinstance(box, np.ndarray):
+        bounding_box2 = patches.Rectangle(
+            (box[pos2, 1], box[pos2, 0]), 
+            box[pos2, 4] - box[pos2, 1],
+            box[pos2, 3] - box[pos2, 0], 
+            linewidth=1, 
+            edgecolor='r',
+            facecolor='none'
+        )
+        plt.gca().add_patch(bounding_box2)
     plt.title(title[2])
+
     plt.show()
 
 

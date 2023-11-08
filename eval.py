@@ -48,6 +48,12 @@ def argParser():
         help="evaluation with predefined masks in training",
     )
     parser.add_argument(
+        "--use_tps",
+        action="store_true",
+        default=False,
+        help="thin-plate spline from fixed keypoints disp to a dense disp",
+    )
+    parser.add_argument(
         "--nodule_kp_dir",
         type=str,
         default=None,
@@ -58,6 +64,12 @@ def argParser():
         type=str,
         default=None,
         help="id of nodule",
+    )
+    parser.add_argument(
+        "--lm",
+        type=str,
+        default="nodule_kpt",
+        help="lm to compute tre (nodule_kpt, nodule_center)",
     )
     parser.add_argument(
         "--mode",
@@ -104,10 +116,12 @@ def main(args):
         downsample=args.downsample, 
         preprocess=args.preprocess,
         eval_with_mask=args.eval_with_mask,
+        use_tps=args.use_tps,
         mask_dir=mask_dir,
         mask_info=mask_info,
         nodule_kp_dir=args.nodule_kp_dir,
         nodule_id=args.nodule_id,
+        lm=args.lm,
     )
 
     # init dataloader
@@ -123,11 +137,12 @@ def main(args):
     if args.mode == "val" or args.mode == "test":
         results = model.predict(eval_loader)
         if args.nodule_kp_dir:
-            results.to_csv(os.path.join(args.save_dir, f"results_{args.mode}_nodule_{os.path.splitext(args.nodule_id)[0]}.csv"))
+            if args.lm == "nodule_kpt":
+                results.to_csv(os.path.join(args.save_dir, f"results_{args.mode}_{args.lm}_{os.path.splitext(args.nodule_id)[0]}.csv"))
+            else:
+                results.to_csv(os.path.join(args.save_dir, f"results_{args.mode}_{args.lm}.csv"))
         else:
             results.to_csv(os.path.join(args.save_dir, f"results_{args.mode}.csv"))
-    #elif args.mode == "test":
-    #    model.predict(eval_loader)
 
 
 if __name__ == "__main__":

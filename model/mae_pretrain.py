@@ -17,8 +17,7 @@ class MAE(nn.Module):
         masking_ratio=0.75,
         decoder_depth=6,
         decoder_heads=8,
-        decoder_dim_head=64,
-        num_masks=1
+        decoder_dim_head=64
     ):
         super().__init__()
         assert masking_ratio > 0 and masking_ratio < 1, 'masking ratio must be kept between 0 and 1'
@@ -29,7 +28,6 @@ class MAE(nn.Module):
         num_patches = (image_size[0] // patch_size) * \
                       (image_size[1] // patch_size) * \
                       (image_size[2] // patch_size)
-        
         patch_dim = channels * patch_size * patch_size * patch_size
         self.patch_size = patch_size
         self.patch_embeddings = nn.Sequential(
@@ -62,7 +60,6 @@ class MAE(nn.Module):
         self.decoder_pos_emb = nn.Embedding(num_patches, decoder_dim)
         new_patch_size = (4, 4, 4)
         self.conv3d_transpose = nn.ConvTranspose3d(decoder_dim, out_channels=channels, kernel_size=new_patch_size, stride=new_patch_size)
-        self.conv3d_transpose_seg = nn.ConvTranspose3d(decoder_dim, out_channels=num_masks, kernel_size=new_patch_size, stride=new_patch_size)
         self.to_pixels = nn.Linear(decoder_dim, pixel_values_per_patch)
 
     def forward(self, img):
@@ -112,35 +109,26 @@ class MAE(nn.Module):
         decoded_tokens = self.Transformer_decoder(decoder_tokens) # [B, num_patches, decoder_dim]
 
         decoder_tokens = decoder_tokens.transpose(1, 2) # [B, decoder_dim, num_patches]
-
         H, W, D = img.shape[2:]
         cuberoot = [H // self.patch_size, W // self.patch_size, D // self.patch_size]
         x_shape = decoder_tokens.size() # B, decoder_dim, num_patches
         x = torch.reshape(decoder_tokens, [x_shape[0], x_shape[1], cuberoot[0], cuberoot[1], cuberoot[2]]) # [B, decoder_dim, cr, cr, cr]
-
-        # recon head
-        x_recon = self.conv3d_transpose(x) # [B, out_c(16), cr * stride(4), cr * stride(4), cr * stride(4)] 
-
-        # seg head
-        x_seg = self.conv3d_transpose_seg(x)
+        x = self.conv3d_transpose(x) # [B, out_c(16), cr * stride(4), cr * stride(4), cr * stride(4)] 
 
         # splice out the mask tokens and project to pixel values
         mask_tokens = decoded_tokens[:, -num_masked:] # [B, num_masked_ind, decoder_dim]
 
-        return x_recon, x_seg, self.to_pixels(mask_tokens), masked_patches
+        return x, self.to_pixels(mask_tokens), masked_patches
 
 
-class MAE_Pretrain_SegNet(nn.Module):
+class MAE_Pretrain_Baseline(nn.Module):
     def __init__(
         self,
-        image_size=(112, 96, 112),
+        image_size,
         in_channels=1,
-        n_skips=5,
         down_factor=2,
-        num_masks=1,
     ):
         super().__init__()
-
         self.mae_transformer = MAE(
             image_size=image_size,
             patch_size=16//2**down_factor,
@@ -151,10 +139,9 @@ class MAE_Pretrain_SegNet(nn.Module):
             masking_ratio=0.75,
             decoder_depth=6,
             decoder_heads=8,
-            decoder_dim_head=64,
-            num_masks=num_masks,
+            decoder_dim_head=64
         )
 
     def forward(self, x):
-        output_recon, output_seg, recon, orig = self.mae_transformer(x)
-        return output_recon, output_seg, recon, orig
+        output, recon, orig = self.mae_transformer(x)
+        return output, recon, orig

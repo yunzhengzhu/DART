@@ -49,62 +49,7 @@ def mindssc(img, delta=1, sigma=0.8):#, channel=1):
     
     #permute to have same ordering as C++ code
     mind = mind[:, torch.Tensor([6, 8, 1, 11, 2, 10, 0, 7, 9, 4, 5, 3]).long(), :, :, :]
-    # mind mean (compress back to 1 channel)
-    #mind = torch.mean(mind, dim=1, keepdim=True)
-    #mind = mind[:, channel:channel+1]
-    #mind = mind[:, 1:2]
     return mind
-
-def mindssc_grad(img, delta=1, sigma=0.8):
-    mind = mindssc(img, delta=delta, sigma=sigma) # 1, 12, h, w, d
-
-    mind_dx = mind[:, :, 1:, :, :] - mind[:, :, :-1, :, :] # 1, 12, h-1, w, d
-    mind_dy = mind[:, :, :, 1:, :] - mind[:, :, :, :-1, :] # 1, 12, h, w-1, d
-    mind_dz = mind[:, :, :, :, 1:] - mind[:, :, :, :, :-1] # 1, 12, h, w, d-1
-
-    eq_hist_mind_dx = torch.from_numpy(
-        exposure.equalize_hist(mind_dx.detach().cpu().numpy())
-    ).float().cuda() # 1, 12, h-1, w, d
-    eq_hist_mind_dy = torch.from_numpy(
-        exposure.equalize_hist(mind_dy.detach().cpu().numpy())
-    ).float().cuda() # 1, 12, h, w-1, d
-    eq_hist_mind_dz = torch.from_numpy(
-        exposure.equalize_hist(mind_dz.detach().cpu().numpy())
-    ).float().cuda() # 1, 12, h, w, d-1
-    #print(eq_hist_mind_dx.min(), eq_hist_mind_dx.max())
-    #print(eq_hist_mind_dy.min(), eq_hist_mind_dy.max())
-    #print(eq_hist_mind_dz.min(), eq_hist_mind_dz.max())
-
-    delta_x = F.pad(eq_hist_mind_dx, (0, 0, 0, 0, 1, 0), mode='replicate') # 1, 12, h, w, d
-    delta_y = F.pad(eq_hist_mind_dy, (0, 0, 1, 0, 0, 0), mode='replicate') # 1, 12, h, w, d
-    delta_z = F.pad(eq_hist_mind_dz, (1, 0, 0, 0, 0, 0), mode='replicate') # 1, 12, h, w, d
-   
-    return torch.cat((delta_x, delta_y, delta_z), 1)
-
-
-def double_mindssc(img, delta=1, sigma=0.8):
-    mind = mindssc(img, delta=delta, sigma=sigma) # 1, 12, h, w, d
-     
-    result = mindssc(mind[:, :1], delta=delta, sigma=sigma)
-    for i in range(1, mind.shape[1]):
-        result = torch.cat((result, mindssc(mind[:, i:i+1], delta=delta, sigma=sigma)), 1)
-        
-    return result
-
-def multiscale_mindssc(img, delta=1, sigma=1.0, downsample=None):
-    mind = mindssc(img, delta=delta, sigma=sigma)
-    
-    result = mind.clone()
-    curr_sigma = sigma
-    if downsample != None:
-        for i, ds in enumerate(downsample):
-            img = F.interpolate(img, align_corners=True, scale_factor=1/ds, mode='trilinear', recompute_scale_factor=True)
-            curr_sigma = curr_sigma / (2 ** (i+1))
-            thisscale_mind = mindssc(img, delta=delta, sigma=curr_sigma)
-            rescale_mind = F.interpolate(thisscale_mind, align_corners=True, scale_factor=ds ** (i+1), mode='trilinear', recompute_scale_factor=True)
-            result = torch.cat((result, rescale_mind), 1)
-    return result
-
 
 def pdist(x, p=2):
     if p==1:

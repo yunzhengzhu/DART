@@ -150,25 +150,6 @@ def argParser():
         help="extract mind features for img",
     )
     parser.add_argument(
-        "--double_mind_feature",
-        action="store_true",
-        default=False,
-        help="extract double mind features for img",
-    )
-    parser.add_argument(
-        "--multiscale_mind_feature",
-        nargs="+",
-        help="list of downsample resolution (example: [2 2 2 2])",
-        default=None,
-        type=int,
-    )
-    parser.add_argument(
-        "--mind_grad",
-        action="store_true",
-        default=False,
-        help="extract mind gradient features for img",
-    )
-    parser.add_argument(
         "--masked_img",
         action="store_true",
         default=False,
@@ -328,9 +309,6 @@ def main(args):
 
             if args.mind_feature:
                 exp_name += "_usemind"
-            
-            if args.mind_grad:
-                exp_name += "_usemindgrad"
             
             if args.masked_img:
                 exp_name += "_usemaskedimg"
