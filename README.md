@@ -1,4 +1,5 @@
-# DART: Deformable Anatomy-aware Registration Toolkit for lung ct registration with keypoints supervision 
+# DART: Deformable Anatomy-aware Registration Toolkit for lung ct registration with keypoints supervision
+Paper: https://ieeexplore.ieee.org/abstract/document/10635326
 <p align="center">
     <img src="figs/overview.png"/> <br />
     <em> 
@@ -134,4 +135,16 @@ A `results_val.csv` will be generated under your `${exp_dir}` folder.
 `SDLogJ`: std of the logarithm of the Jacobian determinant of the displacement vector field
 
 
-## Results
+## Citation
+```bibtex
+@INPROCEEDINGS{10635326,
+  author={Zhu, Yunzheng and Zhuang, Luoting and Lin, Yannan and Zhang, Tengyue and Tabatabaei, Hossein and Aberle, Denise R and Prosper, Ashley E and Chien, Aichi and Hsu, William},
+  booktitle={2024 IEEE International Symposium on Biomedical Imaging (ISBI)}, 
+  title={DART: Deformable Anatomy-Aware Registration Toolkit for Lung CT Registration with Keypoints Supervision}, 
+  year={2024},
+  volume={},
+  number={},
+  pages={1-5},
+  keywords={Training;Image registration;Computed tomography;Computational modeling;Lung;Brain modeling;Transformers;Lung image registration;Masked Autoencoder;Anatomy-Aware Pretraining},
+  doi={10.1109/ISBI56570.2024.10635326}}
+```
