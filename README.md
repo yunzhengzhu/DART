@@ -130,9 +130,9 @@ CUDA_VISIBLE_DEVICES='0' eval.py --exp_dir ${exp_dir} --save_df --save_warped --
 A `results_val.csv` will be generated under your `${exp_dir}` folder.
 
 ### Evaluation Metrics
-`TRE_kp`: Target registration error of [corrField](https://github.com/multimodallearning/Lung250M-4B/tree/main/corrfield)-generated keypoints
-`TRE_nodule`: Target registration error of bounding box centers generated from MONAI nodule detection algorithm (Please see Nodule Center Generation section above)
-`SDLogJ`: std of the logarithm of the Jacobian determinant of the displacement vector field
+`TRE_kp`: Target registration error of [corrField](https://github.com/multimodallearning/Lung250M-4B/tree/main/corrfield)-generated keypoints <br/>
+`TRE_nodule`: Target registration error of bounding box centers generated from MONAI nodule detection algorithm (Please see Nodule Center Generation section above) <br/>
+`SDLogJ`: std of the logarithm of the Jacobian determinant of the displacement vector field <br/>
 
 
 ## Citation
