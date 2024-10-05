@@ -46,7 +46,6 @@ class NLSTDataset(Dataset):
         self.preprocess = preprocess
         self.orient_stand = orient_stand
         self.random_sample = random_sample
-        self.normalize_kp = normalize_kp
         self.kp_dir = kp_dir
         self.nodule_kp_dir = nodule_kp_dir
         self.nodule_id = nodule_id

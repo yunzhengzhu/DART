@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from sklearn.neighbors import NearestNeighbors
 
 # ### mindssc feature #####
 
@@ -200,3 +201,28 @@ def knn_graph(kpts, k, include_self=False):
     A[:, ind[0].t().contiguous().view(-1), torch.arange(N).repeat(k)] = 1
     
     return ind, dist*A, A
+
+def knn_match(kpts1, kpts2, k=1, T=0.03):
+    kpts1 = kpts1.squeeze(0)
+    kpts2 = kpts2.squeeze(0)
+    neighbors = NearestNeighbors(n_neighbors=k, algorithm='auto').fit(kpts1)
+    distances1, indices1 = neighbors.kneighbors(kpts2)
+    distances1 = distances1[:, 0]
+    indices1 = indices1[:, 0]
+
+    neighbors = NearestNeighbors(n_neighbors=k, algorithm='auto').fit(kpts2)
+    distances2, indices2 = neighbors.kneighbors(kpts1)
+    distances2 = distances2[:, 0]
+    indices2 = indices2[:, 0]
+    print(distances1.shape, distances1.max())
+    # threshold
+    pos1 = np.where(distances1 < T)[0]
+    print(pos1, pos1.shape)
+    jud = pos1 - indices2[indices1[pos1]]
+    pos2 = np.where(jud == 0)[0]
+    pos = pos1[pos2]
+
+    kpts1 = kpts1[pos, :][None, ...]
+    kpts2 = kpts2[indices1[pos], :][None, ...]
+
+    return kpts1, kpts2

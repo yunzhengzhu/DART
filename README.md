@@ -17,6 +17,7 @@ cd DART
 ### Pretrained Weights 
 Please download from [link](https://drive.google.com/drive/folders/1YVV1BAR6xSVu07Hsqdpw7rLioRqvvOzx?usp=drive_link) and save the weights folder under your `DART` folder.
 
+
 ### Pre-requisities:
 - NVIDIA GPU
 - python 3.8.12
@@ -32,18 +33,35 @@ Please download from [link](https://drive.google.com/drive/folders/1YVV1BAR6xSVu
 - scikit-learn 0.24.0
 - torchio 0.19.6
 
-Install pytorch and python. You can install other dependencies by
+### Setup Environment
+Install pytorch and python by the following options for environment setup
+## Option 1: Docker (Recommended)
+```bash
+docker run --shm-size=2g --gpus all -it --rm -v .:/workspace -v /etc/localtime:/etc/localtime:ro nvcr.io/nvidia/pytorch:21.12-py3
+```
+## Option 2: Conda
+```bash
+conda create -n dart python=3.8.12
+conda activate dart
+conda install pytorch==1.11.0 torchvision==0.12.0 torchaudio==0.11.0 cudatoolkit=11.3 -c pytorch
+```
+
+You can install other dependencies by
 ```bash
 pip install -r requirements.txt
 ``` 
 
 ### Dataset
 
-Download NLST from [Learn2Reg](https://learn2reg.grand-challenge.org/Datasets/) Datasets. Note: getting access requires registering an account and joining the challenge. The entire dataset consists of 210 pairs of lung CT scans (fixed as baseline and moving as followup) is already preprocessed to a fixed sized 224 x 192 x 224 with spacing 1.5 x 1.5 x 1.5. The corresponding lung masks and keypoints are also provided. For details, please refer to [Learn2Reg2023](https://learn2reg.grand-challenge.org/learn2reg-2023/).
+Download NLST from [Learn2Reg](https://learn2reg.grand-challenge.org/Datasets/) Datasets. The entire dataset consists of 210 pairs of lung CT scans (fixed as baseline and moving as followup) is already preprocessed to a fixed sized 224 x 192 x 224 with spacing 1.5 x 1.5 x 1.5. The corresponding lung masks and keypoints are also provided. For details, please refer to [Learn2Reg2023](https://learn2reg.grand-challenge.org/learn2reg-2023/).
+```bash
+mkdir -p DATA
+cd DATA
+wget https://cloud.imi.uni-luebeck.de/s/pERQBNyEFNLY8gR/download/NLST2023.zip
+```
 
 #### Unzip the folder under your `DATA` folder
 ```bash
-cd DATA
 unzip NLST2023.zip
 ```
 ### Segmentation
@@ -60,7 +78,7 @@ Please refer to [MONAI lung nodule detection](https://catalog.ngc.nvidia.com/org
 ### Training with baselines require no pretraining ([Voxelmorph](https://github.com/voxelmorph/voxelmorph), [ViT-V-Net](https://github.com/junyuchen245/ViT-V-Net_for_3D_Image_Registration_Pytorch))
 #### Downstream Registration
 ```bash
-CUDA_VISIBLE_DEVICES='0' main.py --data_dir DATA/NLST2023 --json_file NLST_dataset.json --result_dir exp --exp_name test --mind_feature --preprocess --use_scaler --downsample 2 --model_type 'Vxm' --loss 'TRE' --loss_weight 1.0 --diff --opt 'adam' --lr 1e-4 --sche 'lambdacosine' --max_epoch 300.0 --lrf 0.01 --batch_size 1 --epochs 300 --seed 1234 --es --es_warmup 0 --es_patience 300 --es_criterion 'TRE' --log --print_every 10
+CUDA_VISIBLE_DEVICES='0' python main.py --data_dir DATA/NLST --json_file NLST_dataset.json --result_dir exp --exp_name test --mind_feature --preprocess --use_scaler --downsample 2 --model_type 'Vxm' --loss 'TRE' --loss_weight 1.0 --diff --opt 'adam' --lr 1e-4 --sche 'lambdacosine' --max_epoch 300.0 --lrf 0.01 --batch_size 1 --epochs 300 --seed 1234 --es --es_warmup 0 --es_patience 300 --es_criterion 'TRE' --log --print_every 10
 ```
 
 **Note: For `model_type` in downstream registration, you need to modify the argument for different models (`Vxm` for Voxelmorph, `ViT-V-Net` for ViT-V-Net, `MAE-ViT_Baseline` for MAE-TransRNet, `MAE_ViT_Seg` for DART)**
@@ -70,14 +88,14 @@ CUDA_VISIBLE_DEVICES='0' main.py --data_dir DATA/NLST2023 --json_file NLST_datas
 #### Evaluation
 ```bash
 exp_dir=weights/registration/vxm
-CUDA_VISIBLE_DEVICES='0' eval.py --exp_dir ${exp_dir} --save_df --save_warped --eval_diff --mode val
+CUDA_VISIBLE_DEVICES='0' python eval.py --exp_dir ${exp_dir} --save_df --save_warped --eval_diff --mode val
 ```
 A `results_val.csv` will be generated under your `${exp_dir}` folder.
 
 ### Training with baselines require pretraining ([MAE-TransRNet](https://github.com/XinXiao101/MAE-TransRNet/tree/main))
 #### Pretraining
 ```bash
-CUDA_VISIBLE_DEVICES='0' pretrain_baseline.py --data_dir DATA/NLST2023 --json_file NLST_dataset.json --result_dir exp --exp_name pt_test --preprocess --use_scaler --mind_feature --downsample 8 --model_type 'MAE_ViT' --loss 'MSE' --loss_weight 1.0 --opt 'adam' --lr 1e-4 --sche 'lambdacosine' --max_epoch 300.0 --lrf 0.01 --batch_size 1 --epochs 1 --seed 1234 --es --es_warmup 0 --es_patience 300 --es_criterion 'MSE' --log --print_every 10
+CUDA_VISIBLE_DEVICES='0' python pretrain_baseline.py --data_dir DATA/NLST --json_file NLST_dataset.json --result_dir exp --exp_name pt_test --preprocess --use_scaler --mind_feature --downsample 8 --model_type 'MAE_ViT' --loss 'MSE' --loss_weight 1.0 --opt 'adam' --lr 1e-4 --sche 'lambdacosine' --max_epoch 300.0 --lrf 0.01 --batch_size 1 --epochs 1 --seed 1234 --es --es_warmup 0 --es_patience 300 --es_criterion 'MSE' --log --print_every 10
 ```
 
 **Note: You could skip this step by using our trained weights from `weights/pretraining/mae_t.pth.tar`**
@@ -90,7 +108,7 @@ Same script as `Downstream Registration` above, but remember to load the pretrai
 #### Evaluation
 ```bash
 exp_dir=weights/registration/mae_t
-CUDA_VISIBLE_DEVICES='0' eval.py --exp_dir ${exp_dir} --save_df --save_warped --eval_diff --mode val
+CUDA_VISIBLE_DEVICES='0' python eval.py --exp_dir ${exp_dir} --save_df --save_warped --eval_diff --mode val
 ```
 A `results_val.csv` will be generated under your `${exp_dir}` folder.
 
@@ -100,7 +118,7 @@ A `results_val.csv` will be generated under your `${exp_dir}` folder.
 #### Pretraining
 ```bash
 mask_dir=DATA/TOTALSEG_MASK
-CUDA_VISIBLE_DEVICES='0' pretrain_baseline.py --data_dir DATA/NLST2023 --json_file NLST_dataset.json --result_dir exp --exp_name pt_test --preprocess --use_scaler --mind_feature --downsample 8 --model_type 'MAE_ViT_Seg' --loss 'MSE' 'Seg_MSE' --loss_weight 1.0 1.0 --opt 'adam' --lr 1e-4 --sche 'lambdacosine' --max_epoch 300.0 --lrf 0.01 --batch_size 1 --epochs 1 --seed 1234 --es --es_warmup 0 --es_patience 300 --es_criterion 'MSE' --log --print_every 10 --mask_dir ${mask_dir} --eval_with_mask --specific_regions 'lung_trachea_bronchia'
+CUDA_VISIBLE_DEVICES='0' python pretrain_baseline.py --data_dir DATA/NLST --json_file NLST_dataset.json --result_dir exp --exp_name pt_test --preprocess --use_scaler --mind_feature --downsample 8 --model_type 'MAE_ViT_Seg' --loss 'MSE' 'Seg_MSE' --loss_weight 1.0 1.0 --opt 'adam' --lr 1e-4 --sche 'lambdacosine' --max_epoch 300.0 --lrf 0.01 --batch_size 1 --epochs 1 --seed 1234 --es --es_warmup 0 --es_patience 300 --es_criterion 'MSE' --log --print_every 10 --mask_dir ${mask_dir} --eval_with_mask --specific_regions 'lung_trachea_bronchia'
 ```
 **Note: Arguments particularly designed for DART: (examples are using filenames from TotalSegmentator)**
 `mask_dir`: specify the dir saving the generated masks
@@ -125,7 +143,7 @@ Same script as `Downstream Registration` above, but remember to load the pretrai
 #### Evaluation
 ```bash
 exp_dir=weights/registration/dart_airways
-CUDA_VISIBLE_DEVICES='0' eval.py --exp_dir ${exp_dir} --save_df --save_warped --eval_diff --mode val
+CUDA_VISIBLE_DEVICES='0' python eval.py --exp_dir ${exp_dir} --save_df --save_warped --eval_diff --mode val
 ```
 A `results_val.csv` will be generated under your `${exp_dir}` folder.
 
