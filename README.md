@@ -35,11 +35,11 @@ Please download from [link](https://drive.google.com/drive/folders/1YVV1BAR6xSVu
 
 ### Setup Environment
 Install pytorch and python by the following options for environment setup
-## Option 1: Docker (Recommended)
+#### Option 1: Docker (Recommended)
 ```bash
 docker run --shm-size=2g --gpus all -it --rm -v .:/workspace -v /etc/localtime:/etc/localtime:ro nvcr.io/nvidia/pytorch:21.12-py3
 ```
-## Option 2: Conda
+#### Option 2: Conda
 ```bash
 conda create -n dart python=3.8.12
 conda activate dart
