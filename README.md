@@ -32,6 +32,7 @@ Please download from [link](https://drive.google.com/drive/folders/1YVV1BAR6xSVu
 - tensorboardX 2.6.2.2
 - scikit-learn 0.24.0
 - torchio 0.19.6
+- TotalSegmentator 1.5.7
 
 ### Setup Environment
 Install pytorch and python by the following options for environment setup
@@ -65,9 +66,71 @@ wget https://cloud.imi.uni-luebeck.de/s/pERQBNyEFNLY8gR/download/NLST2023.zip
 unzip NLST2023.zip
 ```
 ### Segmentation
-Please refer to [TotalSegmentator](https://github.com/wasserth/TotalSegmentator) for generating the masks (lung, lung lobes, pulmonary vessels, airways, vertebrates, ribs, etc.)
+Please refer to [TotalSegmentator](https://github.com/wasserth/TotalSegmentator) for generating the masks (lung, lung lobes, pulmonary vessels, airways, vertebrates, ribs, etc.).
 
-**Note: Please flipping the image to RAS orientation before using totalsegmentator, and flipping the segmentation back to the same orientation as the registration dataset.**
+**Note: Please flipping the image to RAS orientation before using totalsegmentator, and flipping the segmentation back to the same orientation as the registration dataset. It is recommended to use `sitk.GetDirection()` to check the direction parameters and compute the transformation parameters for RAS orientation if your nifti files are saved properly with the correct direction parameters. However, NLST2023 did not store the direction parameters properly. We did flipping in the hard way.**
+
+Example:
+```python
+from totalsegmentator.python_api import totalsegmentator
+import SimpleITK as sitk
+import os
+
+# prepare tmp folders
+if not os.path.exists(TMP_IMG_FOLDER): os.makedirs(TMP_IMG_FOLDER)
+if not os.path.exists(TMP_MASK_FOLDER): os.makedirs(TMP_MASK_FOLDER)
+
+# setup flipping parameters (please modify this based on the orientation for your data)
+FLIP_AXISES = [False, False, True]
+
+# define paths (please modify the path for your data)
+load_path = 'DATA/NLST2023/imagesTr/NLST_0001_0000.nii.gz'
+tmp_img_path = 'DATA/NLST2023/imagesTrRAS/NLST_0001_0000.nii.gz'
+tmp_mask_path = 'DATA/NLST2023/masksTr_totalseg_sp1.5RAS/NLST_0001_0000'
+mask_path = 'DATA/NLST2023/masksTr_totalseg_sp1.5/NLST_0001_0000'
+
+# reorient image to be totalseg adaptable (optional: only if your data is not in RAS orientation)
+if True in FLIP_AXISES:
+    sitk.WriteImage(sitk.Flip(sitk.ReadImage(load_path), FLIP_AXISES), tmp_img_path)
+else:
+    tmp_img_path = load_path
+
+# totalsegmentator (task "total + task "lung_vessels)
+totalsegmentator(
+    tmp_img_path,
+    tmp_mask_path,
+    preview=False,
+    statistics=True,
+    radiomics=False,
+    fast=False,
+    body_seg=True,
+    verbose=False,
+    task="total",
+    roi_subset=None,
+)
+totalsegmentator(
+    tmp_img_path,
+    tmp_mask_path,
+    preview=False,
+    statistics=True,
+    radiomics=False,
+    fast=False,
+    body_seg=True,
+    verbose=False,
+    task="lung_vessels",
+    roi_subset=['lung_vessels', 'lung_trachea_bronchia'],
+)
+
+# reorient mask to original orientation (optional: only if your data is not in RAS orientation)
+if True in FLIP_AXISES:
+    for MASK in os.listdir(tmp_mask_path):
+        sitk.WriteImage(sitk.Flip(sitk.ReadImage(os.path.join(tmp_mask_path, f"{MASK}.nii.gz")), FLIP_AXISES), os.path.join(mask_path, f"{MASK}.nii.gz"))
+else:
+    import shutil
+    shutil.copy(tmp_mask_path, mask_path)
+```
+
+
 
 ### Nodule Center Generation
 
