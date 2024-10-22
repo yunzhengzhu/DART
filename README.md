@@ -1,6 +1,6 @@
 # DART: Deformable Anatomy-aware Registration Toolkit for lung ct registration with keypoints supervision
 [![ISBI 2024 Paper](https://img.shields.io/badge/IEEE-ISBI2024-blue?style=flat&logoColor=blue)](https://ieeexplore.ieee.org/abstract/document/10635326)
-![Apache2.0 License](https://img.shields.io/badge/LICENSE-APACHE2.0-green?style=flat&logoColor=blue)
+[![Apache2.0 License](https://img.shields.io/badge/LICENSE-APACHE2.0-green?style=flat&logoColor=blue)](http://www.apache.org/licenses/)
 <p align="center">
     <img src="figs/overview.png"/> <br />
     <em> 
