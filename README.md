@@ -192,7 +192,7 @@ CUDA_VISIBLE_DEVICES='0' python eval.py --exp_dir ${exp_dir} --save_df --save_wa
 Outputs:
 1. A `results_val.csv` will be generated under your `${exp_dir}/val` folder.
 2. Warped image results will be generated under folder `${exp_dir}/warped_results_val` folder
-Formats are the same as the [Evaluation] (Evaluation section above)
+Formats are the same as the [Evaluation Section](####Evaluation) above.
 
 ### Our proposed method: DART
 **Note: Please prepare segmentation masks (Lung, Lung Lobes, Airways, Pulmonary Vessels, etc.) before doing the following steps.** 
@@ -230,7 +230,7 @@ CUDA_VISIBLE_DEVICES='0' python eval.py --exp_dir ${exp_dir} --save_df --save_wa
 Outputs:
 1. A `results_val.csv` will be generated under your `${exp_dir}/val` folder.
 2. Warped image results will be generated under folder `${exp_dir}/warped_results_val` folder
-Formats are the same as the [Evaluation] (Evaluation section above)
+Formats are the same as the [Evaluation Section](####Evaluation) above.
 
 ### Evaluation Metrics
 `TRE_kp`: Target registration error of [corrField](https://github.com/multimodallearning/Lung250M-4B/tree/main/corrfield)-generated keypoints <br/>
