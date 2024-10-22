@@ -181,8 +181,8 @@ A `results_val.csv` will be generated under your `${exp_dir}` folder.
 
 #### Pretraining
 ```bash
-mask_dir=DATA/NLST/masksTr_totalseg_sp1.5
-CUDA_VISIBLE_DEVICES='0' python pretrain_baseline.py --data_dir DATA/NLST --json_file NLST_dataset.json --result_dir exp --exp_name dart_airways_pt --preprocess --use_scaler --mind_feature --downsample 8 --model_type 'MAE_ViT_Seg' --loss 'MSE' 'Seg_MSE' --loss_weight 1.0 1.0 --opt 'adam' --lr 1e-4 --sche 'lambdacosine' --max_epoch 300.0 --lrf 0.01 --batch_size 1 --epochs 1 --seed 1234 --es --es_warmup 0 --es_patience 300 --es_criterion 'MSE' --log --print_every 10 --mask_dir ${mask_dir} --eval_with_mask --specific_regions 'lung_trachea_bronchia'
+mask_dir=masksTr_totalseg_sp1.5
+CUDA_VISIBLE_DEVICES='0' python pretrain_segnet.py --data_dir DATA/NLST --json_file NLST_dataset.json --result_dir exp --exp_name dart_airways_pt --preprocess --use_scaler --mind_feature --downsample 8 --model_type 'MAE_ViT_Seg' --loss 'MSE' 'Seg_MSE' --loss_weight 1.0 1.0 --opt 'adam' --lr 1e-4 --sche 'lambdacosine' --max_epoch 300.0 --lrf 0.01 --batch_size 1 --epochs 1 --seed 1234 --es --es_warmup 0 --es_patience 300 --es_criterion 'MSE' --log --print_every 10 --mask_dir ${mask_dir} --eval_with_mask --specific_regions 'lung_trachea_bronchia'
 ```
 **Note: Arguments particularly designed for DART: (examples are using filenames from TotalSegmentator)**
 `mask_dir`: specify the dir saving the generated masks
