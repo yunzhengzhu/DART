@@ -1,5 +1,6 @@
 # DART: Deformable Anatomy-aware Registration Toolkit for lung ct registration with keypoints supervision
-Paper: https://ieeexplore.ieee.org/abstract/document/10635326
+[![ISBI 2024 Paper](https://img.shields.io/badge/IEEE-ISBI2024-blue?style=flat&logoColor=blue)](https://ieeexplore.ieee.org/abstract/document/10635326)
+![Apache2.0 License](https://img.shields.io/badge/LICENSE-APACHE2.0-green?style=flat&logoColor=blue)
 <p align="center">
     <img src="figs/overview.png"/> <br />
     <em> 
@@ -191,7 +192,7 @@ tre,2.8793475014998147,0.8593658913588076
 num_fold,0.0,0.0
 log_jac_det_std,0.032200015913826555,0.004685980240356079
 ```
-2. Warped image results will be generated under folder `${exp_dir}/warped_results_val` folder
+2. Warped image results will be generated under the folder `${exp_dir}/warped_results_val` folder
 ```
 warped_results_val
 |--- warped_0101_0101.nii.gz
@@ -219,8 +220,9 @@ CUDA_VISIBLE_DEVICES='0' python eval.py --exp_dir ${exp_dir} --save_df --save_wa
 ```
 Outputs:
 1. A `results_val.csv` will be generated under your `${exp_dir}/val` folder.
-2. Warped image results will be generated under folder `${exp_dir}/warped_results_val` folder
-Formats are the same as the [Evaluation Section](####Evaluation) above.
+2. Warped image results will be generated under the folder `${exp_dir}/warped_results_val` folder.
+
+Formats are the same as the **Evaluation** section above.
 
 ### Our proposed method: DART
 **Note: Please prepare segmentation masks (Lung, Lung Lobes, Airways, Pulmonary Vessels, etc.) before doing the following steps.** 
@@ -257,8 +259,9 @@ CUDA_VISIBLE_DEVICES='0' python eval.py --exp_dir ${exp_dir} --save_df --save_wa
 ```
 Outputs:
 1. A `results_val.csv` will be generated under your `${exp_dir}/val` folder.
-2. Warped image results will be generated under folder `${exp_dir}/warped_results_val` folder
-Formats are the same as the [Evaluation Section](####Evaluation) above.
+2. Warped image results will be generated under the folder `${exp_dir}/warped_results_val` folder.
+
+Formats are the same as the **Evaluation** section above.
 
 ### Evaluation Metrics
 `TRE_kp`: Target registration error of [corrField](https://github.com/multimodallearning/Lung250M-4B/tree/main/corrfield)-generated keypoints <br/>
