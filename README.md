@@ -65,12 +65,23 @@ wget https://cloud.imi.uni-luebeck.de/s/pERQBNyEFNLY8gR/download/NLST2023.zip
 ```bash
 unzip NLST2023.zip
 ```
+Structure of NLST2023
+```
+DATA
+  |--- NLST
+        |--- imagesTr
+                |--- NLST_<PATIENT_ID>_<CASE_ID>.nii.gz
+        |--- masksTr 
+        |--- keypointsTr
+        |--- NLST_dataset.json
+```
+
 ### Segmentation
 Please refer to [TotalSegmentator](https://github.com/wasserth/TotalSegmentator) for generating the masks (lung, lung lobes, pulmonary vessels, airways, vertebrates, ribs, etc.).
 
 **Note: Please flipping the image to RAS orientation before using totalsegmentator, and flipping the segmentation back to the same orientation as the registration dataset. It is recommended to use `sitk.GetDirection()` to check the direction parameters and compute the transformation parameters for RAS orientation if your nifti files are saved properly with the correct direction parameters. However, NLST dataset from L2R 2023 did not store the direction parameters properly. We did flipping in the hard way. We saved masks at `masksTr_totalseg_sp1.5` parallel with `imagesTr`, `masksTr`, and `keypointsTr` as default**
 
-Example:
+Example for One case:
 ```python
 from totalsegmentator.python_api import totalsegmentator
 import SimpleITK as sitk
@@ -130,6 +141,22 @@ else:
     import shutil
     shutil.copy(tmp_mask_path, mask_path)
 ```
+The entire generated mask is recommended to save as below:
+```
+DATA
+  |--- NLST
+        |--- imagesTr
+                |--- NLST_<PATIENT_ID>_<CASE_ID>.nii.gz
+        |--- masksTr 
+        |--- keypointsTr
+        |--- *masksTr_totalseg_sp1.5
+                |--- NLST_<PATIENT_ID>_<CASE_ID>
+                                |--- lung.nii.gz
+                                |--- lung_vessels.nii.gz
+                                |--- ...
+        |--- NLST_dataset.json
+```
+
 
 ### Nodule Center Generation
 
