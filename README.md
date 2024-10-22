@@ -142,9 +142,12 @@ Please refer to [MONAI lung nodule detection](https://catalog.ngc.nvidia.com/org
 CUDA_VISIBLE_DEVICES='0' python main.py --data_dir DATA/NLST --json_file NLST_dataset.json --result_dir exp --exp_name vxm --mind_feature --preprocess --use_scaler --downsample 2 --model_type 'Vxm' --loss 'TRE' --loss_weight 1.0 --diff --opt 'adam' --lr 1e-4 --sche 'lambdacosine' --max_epoch 300.0 --lrf 0.01 --batch_size 1 --epochs 300 --seed 1234 --es --es_warmup 0 --es_patience 300 --es_criterion 'TRE' --log --print_every 10
 ```
 
-**Note: For `model_type` in downstream registration, you need to modify the argument for different models (`Vxm` for Voxelmorph, `ViT-V-Net` for ViT-V-Net, `MAE-ViT_Baseline` for MAE-TransRNet, `MAE_ViT_Seg` for DART).**
+**Note: For `model_type` in downstream registration, you need to modify the argument for different models (`Vxm` for Voxelmorph, `ViT-V-Net` for ViT-V-Net, `MAE_ViT_Baseline` for MAE-TransRNet, `MAE_ViT_Seg` for DART).**
 
-**Note: You could skip this step by using our trained weights from `weights/registration/vxm/es_checkpoint.pth.tar` or `weights/registration/vitvnet/es_checkpoint.pth.tar` and remember to put the corresponding `args.json` under `${result_dir}/${exp_name}`**
+**Note: You could skip this step by saving our trained weights from `weights/registration/vxm/es_checkpoint.pth.tar` or `weights/registration/vitvnet/es_checkpoint.pth.tar` along with the corresponding `args.json` under ${result_dir}/${exp_name}`**
+```bash
+cp -r weights/registration/vxm exp/.
+```
 
 #### Evaluation
 ```bash
@@ -159,16 +162,16 @@ A `results_val.csv` will be generated under your `${exp_dir}` folder.
 CUDA_VISIBLE_DEVICES='0' python pretrain_baseline.py --data_dir DATA/NLST --json_file NLST_dataset.json --result_dir exp --exp_name mae_t_ft --preprocess --use_scaler --mind_feature --downsample 8 --model_type 'MAE_ViT' --loss 'MSE' --loss_weight 1.0 --opt 'adam' --lr 1e-4 --sche 'lambdacosine' --max_epoch 300.0 --lrf 0.01 --batch_size 1 --epochs 1 --seed 1234 --es --es_warmup 0 --es_patience 300 --es_criterion 'MSE' --log --print_every 10
 ```
 
-**Note: You could skip this step by using our trained weights from `weights/pretraining/mae_t/mae_t.pth.tar` and remember to put the corresponding `args.json` under `${result_dir}/${exp_name}`**
+**Note: You could skip this step by using our trained weights from `weights/pretraining/mae_t/mae_t.pth.tar`**
 
 #### Downstream Registration
 Same script as `Downstream Registration` above, but remember to load the pretrained weights by adding the argument `--pretrained ${pretrained_weights}`. Remember to specify `model_type` as `MAE_ViT_Baseline` before running.
 
-**Note: You could skip this step by using our trained weights from `weights/registration/mae_t/es_checkpoint.pth.tar` and remember to put the corresponding `args.json` under `${result_dir}/${exp_name}`**
+**Note: You could skip this step by saving our trained weights from `weights/registration/mae_t/es_checkpoint.pth.tar` along with the corresponding `args.json` under `${result_dir}/${exp_name}`**
 
 #### Evaluation
 ```bash
-exp_dir=weights/registration/mae_t
+exp_dir=exp/mae_t
 CUDA_VISIBLE_DEVICES='0' python eval.py --exp_dir ${exp_dir} --save_df --save_warped --eval_diff --mode val
 ```
 A `results_val.csv` will be generated under your `${exp_dir}` folder.
@@ -194,16 +197,16 @@ CUDA_VISIBLE_DEVICES='0' python pretrain_baseline.py --data_dir DATA/NLST --json
 - lung + vertebrae (LV): `'lung' 'vertebrae'`
 - lung + rib + vertebrae (LRV): `'lung' 'rib' 'vertebrae'`
 
-**Note: You could skip this step by using our trained weights from `weights/pretraining/dart_airways/dart_airways.pth.tar` and remember to put the corresponding `args.json` under ${result_dir}/${exp_name}`**
+**Note: You could skip this step by using our trained weights from `weights/pretraining/dart_airways/dart_airways.pth.tar`**
 
 #### Downstream Registration
 Same script as `Downstream Registration` above, but remember to load the pretrained weights by adding the argument `--pretrained weights/dart_airways.pth.tar` or your own trained weights. Remember to specify `model_type` as `MAE_ViT_Baseline` before running.
 
-**Note: You could skip this step by using our trained weights from `weights/registration/dart_airways/es_checkpoint.pth.tar` and remember to put the corresponding `args.json` under ${result_dir}/${exp_name}`**
+**Note: You could skip this step by using our trained weights from `weights/registration/dart_airways/es_checkpoint.pth.tar` along with the corresponding `args.json` under ${result_dir}/${exp_name}`**
 
 #### Evaluation
 ```bash
-exp_dir=weights/registration/dart_airways
+exp_dir=exp/dart_airways
 CUDA_VISIBLE_DEVICES='0' python eval.py --exp_dir ${exp_dir} --save_df --save_warped --eval_diff --mode val
 ```
 A `results_val.csv` will be generated under your `${exp_dir}` folder.
