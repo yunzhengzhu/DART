@@ -107,7 +107,7 @@ if True in FLIP_AXISES:
 else:
     tmp_img_path = load_path
 
-# totalsegmentator (task "total + task "lung_vessels)
+# totalsegmentator (task "total" + task "lung_vessels")
 totalsegmentator(
     tmp_img_path,
     tmp_mask_path,
