@@ -87,7 +87,7 @@ mask_path = 'DATA/NLST/masksTr_totalseg_sp1.5/NLST_0001_0000'
 
 if not os.path.exists('DATA/NLST/imagesTrRAS'): os.makedirs('DATA/NLST/imagesTrRAS')
 if not os.path.exists('DATA/NLST/masksTr_totalseg_sp1.5RAS'): os.makedirs('DATA/NLST/masksTr_totalseg_sp1.5RAS')
-if not os.path.exists('DATA/NLST/masksTr_totalseg_sp1.5'): os.makedirs('DATA/NLST/masksTr_totalseg_sp1.5')
+if not os.path.exists('DATA/NLST/masksTr_totalseg_sp1.5/NLST_0001_0000'): os.makedirs('DATA/NLST/masksTr_totalseg_sp1.5/NLST_0001_0000')
 
 # reorient image to be totalseg adaptable (optional: only if your data is not in RAS orientation)
 if True in FLIP_AXISES:
@@ -124,7 +124,8 @@ totalsegmentator(
 # reorient mask to original orientation (optional: only if your data is not in RAS orientation)
 if True in FLIP_AXISES:
     for MASK in os.listdir(tmp_mask_path):
-        sitk.WriteImage(sitk.Flip(sitk.ReadImage(os.path.join(tmp_mask_path, f"{MASK}.nii.gz")), FLIP_AXISES), os.path.join(mask_path, f"{MASK}.nii.gz"))
+        if MASK.endswith(".nii.gz"):
+            sitk.WriteImage(sitk.Flip(sitk.ReadImage(os.path.join(tmp_mask_path, MASK)), FLIP_AXISES), os.path.join(mask_path, MASK))
 else:
     import shutil
     shutil.copy(tmp_mask_path, mask_path)
