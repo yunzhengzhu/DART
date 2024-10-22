@@ -8,3 +8,4 @@ matplotlib==3.5.0
 tensorboardX==2.6.2.2
 scikit-learn==0.24.0
 torchio==0.19.6
+TotalSegmentator==1.5.7
