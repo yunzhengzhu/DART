@@ -142,7 +142,7 @@ Please refer to [MONAI lung nodule detection](https://catalog.ngc.nvidia.com/org
 CUDA_VISIBLE_DEVICES='0' python main.py --data_dir DATA/NLST --json_file NLST_dataset.json --result_dir exp --exp_name vxm --mind_feature --preprocess --use_scaler --downsample 2 --model_type 'Vxm' --loss 'TRE' --loss_weight 1.0 --diff --opt 'adam' --lr 1e-4 --sche 'lambdacosine' --max_epoch 300.0 --lrf 0.01 --batch_size 1 --epochs 300 --seed 1234 --es --es_warmup 0 --es_patience 300 --es_criterion 'TRE' --log --print_every 10
 ```
 
-**Note: For `model_type` in downstream registration, you need to modify the argument for different models (`Vxm` for Voxelmorph, `ViT-V-Net` for ViT-V-Net, `MAE_ViT_Baseline` for MAE-TransRNet, `MAE_ViT_Seg` for DART).**
+**Note: For `model_type` in downstream registration, you need to modify the argument for different models (`Vxm` for Voxelmorph, `ViT-V-Net` for ViT-V-Net, `MAE_ViT_Baseline` for MAE-TransRNet and DART).**
 
 **Note: You could skip this step by saving our trained weights from `weights/registration/vxm/es_checkpoint.pth.tar` or `weights/registration/vitvnet/es_checkpoint.pth.tar` along with the corresponding `args.json` under ${result_dir}/${exp_name}`**
 ```bash
@@ -154,7 +154,22 @@ cp -r weights/registration/vxm exp/.
 exp_dir=exp/vxm
 CUDA_VISIBLE_DEVICES='0' python eval.py --exp_dir ${exp_dir} --save_df --save_warped --eval_diff --mode val
 ```
-A `results_val.csv` will be generated under your `${exp_dir}` folder.
+Outputs:
+1. A `results_val.csv` will be generated under your `${exp_dir}/val` folder.
+```
+,val_mean,val_std
+dice,0.8887555992222518,0.028818873936942713
+tre,2.8793475014998147,0.8593658913588076
+num_fold,0.0,0.0
+log_jac_det_std,0.032200015913826555,0.004685980240356079
+```
+2. Warped image results will be generated under folder `${exp_dir}/warped_results_val` folder
+```
+warped_results_val
+|--- warped_0101_0101.nii.gz
+|--- warped_0102_0102.nii.gz
+|--- ...
+```
 
 ### Training with baselines require pretraining ([MAE-TransRNet](https://github.com/XinXiao101/MAE-TransRNet/tree/main))
 #### Pretraining
@@ -174,7 +189,10 @@ Same script as `Downstream Registration` above, but remember to load the pretrai
 exp_dir=exp/mae_t
 CUDA_VISIBLE_DEVICES='0' python eval.py --exp_dir ${exp_dir} --save_df --save_warped --eval_diff --mode val
 ```
-A `results_val.csv` will be generated under your `${exp_dir}` folder.
+Outputs:
+1. A `results_val.csv` will be generated under your `${exp_dir}/val` folder.
+2. Warped image results will be generated under folder `${exp_dir}/warped_results_val` folder
+Formats are the same as the [Evaluation] (Evaluation section above)
 
 ### Our proposed method: DART
 **Note: Please prepare segmentation masks (Lung, Lung Lobes, Airways, Pulmonary Vessels, etc.) before doing the following steps.** 
@@ -209,7 +227,10 @@ Same script as `Downstream Registration` above, but remember to load the pretrai
 exp_dir=exp/dart_airways
 CUDA_VISIBLE_DEVICES='0' python eval.py --exp_dir ${exp_dir} --save_df --save_warped --eval_diff --mode val
 ```
-A `results_val.csv` will be generated under your `${exp_dir}` folder.
+Outputs:
+1. A `results_val.csv` will be generated under your `${exp_dir}/val` folder.
+2. Warped image results will be generated under folder `${exp_dir}/warped_results_val` folder
+Formats are the same as the [Evaluation] (Evaluation section above)
 
 ### Evaluation Metrics
 `TRE_kp`: Target registration error of [corrField](https://github.com/multimodallearning/Lung250M-4B/tree/main/corrfield)-generated keypoints <br/>
